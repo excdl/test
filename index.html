@@ -6,198 +6,128 @@
 <title>智能打卡系統</title>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY"></script>
 <style>
-body { margin:0; font-family: Arial; }
-#map { width:100%; height:100vh; }
-#clockBtn {
-    position: absolute;
-    bottom: 150px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    border: none;
-    font-size: 26px;
-    font-weight: bold;
-    color: #fff;
-    cursor: pointer;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
-    transition: 0.3s;
-    display:flex; align-items:center; justify-content:center;
-}
-#clockBtn.on { background: linear-gradient(145deg, #2ecc71, #27ae60); }
-#clockBtn.off { background: linear-gradient(145deg, #3498db, #2980b9); }
-#clockBtn:active { transform: translateX(-50%) scale(0.95); }
-#addressCard, #recordsCard {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(255,255,255,0.95);
-    border-radius: 15px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-    padding: 12px 20px;
-    font-size: 16px;
-    max-width: 90%;
-}
-#addressCard { top: 20px; }
-#recordsCard { bottom: 20px; max-height:180px; overflow-y:auto; cursor:pointer; }
-#countdownWrapper {
-    position: absolute;
-    bottom: 150px; left: 50%;
-    transform: translateX(-50%);
-    width: 140px; height:140px; pointer-events:none; display:none;
-}
-#circleProgress { fill:none; stroke-width:12; stroke-linecap:round; transform: rotate(-90deg); transform-origin: center;}
-#countdownText { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-weight:bold; font-size:18px;}
+body { font-family: Arial; background:#f7f7f7; display:flex; justify-content:center; padding:25px; margin:0; }
+.card { background:white; width:95%; max-width:480px; box-shadow:0 8px 25px rgba(0,0,0,0.12); border-radius:18px; padding:25px 20px; display:flex; flex-direction:column; align-items:center; gap:20px; }
+#userInfo { font-size:24px; font-weight:bold; }
+#statusInfo { font-size:20px; padding:6px 18px; border-radius:30px; display:inline-block; font-weight:bold; }
+#dateTime { font-size:18px; }
+#clockBtn { width:120px; height:120px; border-radius:50%; font-size:22px; font-weight:bold; border:none; cursor:pointer; transition:0.3s; }
+#todayRecords { width:100%; background:#fafafa; border-radius:12px; padding:15px; border:1px solid #ddd; font-size:16px; cursor:pointer; }
 </style>
 </head>
 <body>
-
-<div id="map"></div>
-
-<div id="countdownWrapper">
-    <svg width="140" height="140">
-        <circle id="circleProgress" cx="70" cy="70" r="60"></circle>
-    </svg>
-    <div id="countdownText">打卡中...</div>
+<div class="card">
+  <div id="userInfo">正在獲取使用者資訊...</div>
+  <div id="statusInfo">載入中...</div>
+  <div id="dateTime">載入中...</div>
+  <button id="clockBtn">上班</button>
+  <div id="todayRecords">今日打卡紀錄：點擊刷新</div>
 </div>
 
-<button id="clockBtn" class="off">上班</button>
-<div id="addressCard">載入地址中...</div>
-<div id="recordsCard">今日打卡紀錄：點擊刷新</div>
-
 <script>
-// ===== 基本設定 =====
-const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbzveR74NPq6vbDZMdGg3PimAGRSYTW3exDf3drgNqn44oaxLPb-3sVTnDl-qkh_xyQ1/exec";
-const COMPANY_SHEET = "公司據點";
+const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbyE-LTSMb0NcERkHvy48G337vQH3IxsuajHvJLnkf8x_x-upXbwETMluTOxcAaz3w/exec"; // 後端 doPost 網址
 
-let map,userMarker,clockStatus="上班",userId="",userName="",userLat=0,userLng=0;
+let status = "上班";
+let userId = "", userName = "";
 
-// ===== LIFF 登入 =====
-async function initLIFF(){
-    await liff.init({ liffId: "YOUR_LIFF_ID" });
-    if(!liff.isLoggedIn()) await liff.login();
-    const profile = await liff.getProfile();
-    userId = profile.userId; userName = profile.displayName;
+// 更新時間
+function updateDateTime() {
+  const now = new Date();
+  document.getElementById("dateTime").textContent = now.toLocaleString("zh-TW",{hour12:false});
+}
+setInterval(updateDateTime,1000);
+updateDateTime();
+
+// LIFF 初始化
+async function initUser(){
+  await liff.init({ liffId: "你的 LIFF ID" });
+  if(!liff.isLoggedIn()) await liff.login();
+  const profile = await liff.getProfile();
+  userId = profile.userId;
+  userName = profile.displayName;
+  document.getElementById("userInfo").textContent = `${userName} 您好`;
+  document.getElementById("statusInfo").textContent = "正在準備打卡...";
 }
 
-// ===== 取得 IP =====
-async function getIP(){ try{ const res=await fetch("https://api.ipify.org?format=json"); return (await res.json()).ip; }catch{return "";}}
-
-// ===== 計算距離 =====
-function distance(lat1,lng1,lat2,lng2){
-    const R=6371000; const toRad=Math.PI/180;
-    const dLat=(lat2-lat1)*toRad; const dLng=(lng2-lng1)*toRad;
-    const a=Math.sin(dLat/2)**2 + Math.cos(lat1*toRad)*Math.cos(lat2*toRad)*Math.sin(dLng/2)**2;
-    const c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-    return R*c;
+// 獲取 IP
+async function getIP(){
+  try{
+    const res = await fetch("https://api.ipify.org?format=json");
+    const data = await res.json();
+    return data.ip;
+  }catch{ return ""; }
 }
 
-// ===== 初始化地圖 =====
-function initMap(){
-    if(navigator.geolocation){
-        navigator.geolocation.getCurrentPosition(pos=>{
-            userLat=pos.coords.latitude; userLng=pos.coords.longitude;
-            map=new google.maps.Map(document.getElementById("map"),{center:{lat:userLat,lng:userLng},zoom:16});
-            userMarker=new google.maps.Marker({position:{lat:userLat,lng:userLng}, map, title:"您目前位置", icon:{url:"http://maps.google.com/mapfiles/ms/icons/blue-dot.png"}});
-            const geocoder=new google.maps.Geocoder();
-            geocoder.geocode({location:{lat:userLat,lng:userLng}}, (results,status)=>{
-                if(status==="OK"&&results[0]) document.getElementById("addressCard").textContent = results[0].formatted_address;
-            });
-            loadCompanyMarkers();
-        });
-    }else alert("無法取得位置");
-}
+// 打卡
+async function clockInOut(){
+  document.getElementById("clockBtn").disabled = true;
+  document.getElementById("statusInfo").textContent = "打卡中...";
 
-// ===== 載入公司據點 =====
-async function loadCompanyMarkers(){
-    try{
-        const res = await fetch(`${API_ENDPOINT}?action=getCompany&sheet=${COMPANY_SHEET}`);
-        const data = await res.json();
-        const infoWindow = new google.maps.InfoWindow();
-        data.forEach(c=>{
-            const dist=distance(userLat,userLng,parseFloat(c.lat),parseFloat(c.lng));
-            const isOut = dist>parseFloat(c.allow);
-            const color = isOut?"red":"green";
-            const marker = new google.maps.Marker({position:{lat:parseFloat(c.lat),lng:parseFloat(c.lng)}, map, icon:{url:`http://maps.google.com/mapfiles/ms/icons/${color}-dot.png`}});
-            marker.addListener("click", ()=>{
-                infoWindow.setContent(`<div style="font-size:14px;line-height:1.4;">
-                    <strong>${c.name}</strong><br>距離:${Math.round(dist)} m<br>允許範圍:${c.allow} m<br>
-                    <span style="color:${isOut?'red':'green'};">${isOut?'超出範圍':'可打卡'}</span>
-                </div>`);
-                infoWindow.open(map, marker);
-            });
-        });
-    }catch(err){ console.error(err); }
-}
+  let ip = await getIP();
+  let gps = null;
+  try{
+    gps = await new Promise((resolve,reject)=>{
+      navigator.geolocation.getCurrentPosition(pos=>{
+        resolve({lat:pos.coords.latitude,lng:pos.coords.longitude});
+      },err=>resolve(null),{enableHighAccuracy:true,timeout:5000});
+    });
+  }catch{ gps=null; }
 
-// ===== 打卡動畫 + API =====
-async function performClockIn(status,lat,lng){
-    const ip = await getIP();
-    const wrapper = document.getElementById("countdownWrapper");
-    const circle = document.getElementById("circleProgress");
-    const text = document.getElementById("countdownText");
-    wrapper.style.display="block"; text.textContent="打卡中...";
-    const radius=60, circumference=2*Math.PI*radius;
-    circle.style.strokeDasharray=circumference;
-    circle.style.strokeDashoffset=circumference;
-    let progress=0;
-
-    function animate(){
-        progress=Math.min(progress+0.01,1);
-        circle.style.strokeDashoffset=circumference*(1-progress);
-        if(progress<1) requestAnimationFrame(animate);
-        else setTimeout(()=>{ wrapper.style.display="none"; },600);
-    }
-    requestAnimationFrame(animate);
-
-    try{
-        const res = await fetch(API_ENDPOINT,{method:"POST",body:JSON.stringify({userId,userName,status,lat,lng,ip})});
-        const data = await res.json();
-        if(data.message.includes("成功")) Swal.fire({icon:"success",title:"🎉 打卡成功",html:`<strong>打卡時間：</strong>${data.date} ${data.time}`,timer:2000,showConfirmButton:false,backdrop:"rgba(0,0,0,0.5)"});
-        else Swal.fire({icon:"error",title:"😥 打卡失敗",html:data.message,timer:2000,showConfirmButton:false,backdrop:"rgba(0,0,0,0.5)"});
-        updateTodayRecords();
-    }catch(err){ console.error(err); }
-}
-
-// ===== 今日打卡紀錄 =====
-async function updateTodayRecords(){
-    try{
-        const today = new Date().toLocaleDateString("zh-TW").replace(/\//g,"/");
-        const res = await fetch(`${API_ENDPOINT}?action=getToday&userId=${userId}&date=${today}`);
-        const data = await res.json();
-        const container=document.getElementById("recordsCard");
-        if(!data.length) container.textContent="今日打卡紀錄：無";
-        else container.innerHTML="今日打卡紀錄：<br>"+data.map(r=>{
-            const time=r.time;
-            const makeup=r.isMakeup?"(補打卡-待審核)":"";
-            return `${r.status} ${time} ${makeup}`;
-        }).join("<br>");
-    }catch(err){ console.error(err); }
-}
-document.getElementById("recordsCard").addEventListener("click",updateTodayRecords);
-
-// ===== 按鈕事件 =====
-const clockBtn = document.getElementById("clockBtn");
-clockBtn.addEventListener("click", async ()=>{
-    if(!userLat||!userLng)return;
-    await performClockIn(clockStatus,userLat,userLng);
-    if(clockStatus==="上班"){ clockStatus="下班"; clockBtn.textContent="下班"; clockBtn.classList.replace("off","on"); }
-    else{ clockStatus="上班"; clockBtn.textContent="上班"; clockBtn.classList.replace("on","off"); }
-});
-
-// ===== 初始化 =====
-window.onload = async ()=>{
-    await initLIFF();
-    initMap();
+  // 發送 API
+  let resData = {userId,userName,status,ip,gps};
+  try{
+    const res = await fetch(API_ENDPOINT,{
+      method:"POST",
+      body: JSON.stringify(resData)
+    });
+    const result = await res.json();
+    Swal.fire({icon:"success",title:result.message,html:`打卡時間：${result.date} ${result.time}`,timer:2000,showConfirmButton:false});
     updateTodayRecords();
+  }catch(err){
+    Swal.fire({icon:"error",title:"打卡失敗",html:err,message,timer:2000,showConfirmButton:false});
+  }
+
+  // 切換按鈕
+  status = status=="上班"?"下班":"上班";
+  updateClockBtn();
+  document.getElementById("clockBtn").disabled = false;
+}
+
+// 更新按鈕文字與顏色
+function updateClockBtn(){
+  const btn = document.getElementById("clockBtn");
+  btn.textContent = status;
+  btn.style.background = status=="上班"?"linear-gradient(145deg,#3498db,#2980b9)":"linear-gradient(145deg,#2ecc71,#27ae60)";
+  btn.style.color="white";
+}
+
+// 今日打卡紀錄
+async function updateTodayRecords(){
+  const today = new Date().toISOString().slice(0,10);
+  try{
+    const res = await fetch(`${API_ENDPOINT}?action=getToday&userId=${userId}&date=${today}`);
+    const data = await res.json();
+    const container = document.getElementById("todayRecords");
+    if(!data.length){ container.innerHTML="今日打卡紀錄：無"; return; }
+    container.innerHTML="今日打卡紀錄：<br>"+data.map(r=>{
+      let color = (r.distance && parseFloat(r.distance)>r.allow)?'red':'green';
+      return `<span style="color:${color}">${r.status} ${r.time} ${r.distance?r.distance+"公尺":""} ${r.nearestCompany||""}</span>`;
+    }).join("<br>");
+  }catch{ document.getElementById("todayRecords").textContent="今日打卡紀錄：讀取失敗"; }
+}
+
+document.getElementById("clockBtn").onclick = clockInOut;
+document.getElementById("todayRecords").onclick = updateTodayRecords;
+
+window.onload = async ()=>{
+  await initUser();
+  updateClockBtn();
+  updateTodayRecords();
 };
 </script>
 </body>
 </html>
-
 
 
 
