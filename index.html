@@ -2,70 +2,179 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>智能打卡</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智慧打卡系統</title>
+
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
 <style>
-body{background:#eef2f7;font-family:"Microsoft JhengHei";display:flex;justify-content:center;padding:20px}
-.card{background:#fff;border-radius:20px;padding:25px;width:100%;max-width:420px;text-align:center;box-shadow:0 10px 25px rgba(0,0,0,.15)}
-.circle{width:140px;height:140px;border-radius:50%;font-size:26px;border:none;color:#fff;cursor:pointer;box-shadow:0 6px 12px rgba(0,0,0,.25)}
-.on{background:#3498db}.off{background:#2ecc71}
+body{
+  font-family:"Microsoft JhengHei",Arial;
+  background:#eef2f7;
+  margin:0;
+  padding:20px;
+  display:flex;
+  justify-content:center;
+}
+.card{
+  width:100%;
+  max-width:480px;
+  background:#fff;
+  border-radius:20px;
+  padding:25px;
+  box-shadow:0 10px 25px rgba(0,0,0,.15);
+}
+.title{font-size:26px;font-weight:bold;text-align:center;}
+.info{margin:10px 0;font-size:18px;}
+.badge{display:inline-block;padding:5px 14px;border-radius:20px;font-weight:bold}
+.ok{background:#e8f7ef;color:#1e8449}
+.err{background:#fdecea;color:#922b21}
+.time{font-size:20px;text-align:center;margin:10px 0}
+.circle{
+  width:140px;height:140px;border-radius:50%;
+  border:none;font-size:26px;color:#fff;
+  cursor:pointer;display:block;margin:20px auto;
+  box-shadow:0 6px 15px rgba(0,0,0,.3)
+}
+.on{background:#3498db}
+.off{background:#2ecc71}
+.records{
+  border:1px solid #ddd;border-radius:12px;
+  padding:10px;font-size:16px;min-height:80px;
+  cursor:pointer;background:#fafafa
+}
 </style>
 </head>
 <body>
 
 <div class="card">
-  <h2 id="user">載入中...</h2>
-  <p id="info"></p>
-  <button id="btn" class="circle on">上班</button>
+  <div class="title">智慧打卡系統</div>
+
+  <div class="info">👤 使用者：<b id="userName">載入中...</b></div>
+  <div class="info">🏢 連線據點：<span id="company" class="badge err">載入中</span></div>
+  <div class="info">📍 打卡範圍：<span id="range" class="badge err">判斷中</span></div>
+
+  <div class="time" id="nowTime"></div>
+
+  <button id="clockBtn" class="circle on">上班</button>
+
+  <div class="records" id="records">📄 今日打卡紀錄（點擊刷新）</div>
 </div>
 
 <script>
-const API = "https://script.google.com/macros/s/AKfycbzSxc1UyM75jxbVe1lg1dNKkxvQqrP92xmDz47lLYXDXGoBx3aQ9s_Rejy0I6UPStup/exec";
-let isIn = true, userId="", userName="";
+/* ================== 基本設定 ================== */
+const LIFF_ID = "YOUR_LIFF_ID";
+const API_URL = "https://script.google.com/macros/s/AKfycbzSxc1UyM75jxbVe1lg1dNKkxvQqrP92xmDz47lLYXDXGoBx3aQ9s_Rejy0I6UPStup/exec";
 
-liff.init({ liffId:"你的LIFF_ID" }).then(async()=>{
+/* ================== State ================== */
+let state = {
+  userId:"",
+  userName:"",
+  isClockIn:true
+};
+
+/* ================== 時間 ================== */
+function updateTime(){
+  document.getElementById("nowTime").innerText =
+    new Date().toLocaleString("zh-TW",{hour12:false});
+}
+setInterval(updateTime,1000);
+updateTime();
+
+/* ================== IP ================== */
+async function getIP(){
+  try{
+    const r = await fetch("https://api.ipify.org?format=json");
+    return (await r.json()).ip;
+  }catch{return "";}
+}
+
+/* ================== LIFF ================== */
+async function initLIFF(){
+  await liff.init({liffId:LIFF_ID});
   if(!liff.isLoggedIn()) liff.login();
   const p = await liff.getProfile();
-  userId = p.userId;
-  userName = p.displayName;
-  document.getElementById("user").innerText = userName;
-});
+  state.userId = p.userId;
+  state.userName = p.displayName;
+  document.getElementById("userName").innerText = state.userName;
+}
 
-document.getElementById("btn").onclick = ()=>{
+/* ================== 打卡 ================== */
+async function clock(){
+  const btn = document.getElementById("clockBtn");
+  btn.disabled = true;
+  btn.innerText = "打卡中...";
+
+  const ip = await getIP();
+
   navigator.geolocation.getCurrentPosition(async pos=>{
-    const res = await fetch(API,{
+    const res = await fetch(API_URL,{
       method:"POST",
       body:JSON.stringify({
-        userId,
-        userName,
-        status: isIn?"上班":"下班",
-        ip:"",
+        userId:state.userId,
+        userName:state.userName,
+        status: state.isClockIn?"上班":"下班",
+        ip,
         gps:{lat:pos.coords.latitude,lng:pos.coords.longitude}
       })
     });
     const data = await res.json();
 
-    if(data.reject){
-      Swal.fire("提示",data.message,"warning");
-      return;
-    }
+    updateCompanyUI(data);
+    Swal.fire(data.message);
 
-    Swal.fire({
-      icon: data.fakeGps?"error":(data.rangeStatus==="正常"?"success":"warning"),
-      title: data.message,
-      html: `公司：${data.nearestCompany}<br>距離：${data.distance}m`
-    });
+    state.isClockIn = !state.isClockIn;
+    btn.innerText = state.isClockIn?"上班":"下班";
+    btn.className = "circle " + (state.isClockIn?"on":"off");
+    btn.disabled = false;
 
-    isIn = !isIn;
-    const btn = document.getElementById("btn");
-    btn.innerText = isIn?"上班":"下班";
-    btn.className = "circle " + (isIn?"on":"off");
+    loadToday();
+  },()=>{
+    Swal.fire("無法取得 GPS");
+    btn.disabled = false;
   });
+}
+
+/* ================== UI 更新 ================== */
+function updateCompanyUI(data){
+  const c = document.getElementById("company");
+  const r = document.getElementById("range");
+
+  c.innerText = data.nearestCompany || "未知連線";
+  c.className = "badge " + (data.nearestCompany?"ok":"err");
+
+  r.innerText = data.rangeStatus;
+  r.className = "badge " + (data.rangeStatus==="正常"?"ok":"err");
+}
+
+/* ================== 今日紀錄 ================== */
+async function loadToday(){
+  const today = new Date().toISOString().slice(0,10);
+  const res = await fetch(`${API_URL}?action=today&userId=${state.userId}&date=${today}`);
+  const data = await res.json();
+
+  const box = document.getElementById("records");
+  if(!data.length){
+    box.innerHTML = "📄 今日無打卡紀錄";
+    return;
+  }
+  box.innerHTML = "📄 今日打卡紀錄<br>" +
+    data.map(r=>`${r.time} ${r.status}`).join("<br>");
+}
+
+/* ================== 啟動 ================== */
+document.getElementById("clockBtn").onclick = clock;
+document.getElementById("records").onclick = loadToday;
+
+window.onload = async ()=>{
+  await initLIFF();
+  loadToday();
 };
 </script>
 </body>
 </html>
+
 
 
 
