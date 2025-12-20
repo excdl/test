@@ -16,7 +16,6 @@ body {
     margin:0;
 }
 
-/* 控制面板卡片 */
 #controlPanel {
     background:white;
     padding:25px 20px;
@@ -26,18 +25,31 @@ body {
     max-width:500px;
     display:flex;
     flex-direction:column;
-    gap:20px;
+    gap:15px;
     align-items:center;
     box-sizing:border-box;
 }
 
-/* 使用者資訊 */
 #userInfo { text-align:center; font-size:26px; font-weight:bold; }
-
-/* 日期時間 */
 #dateTime { text-align:center; font-size:22px; }
 
-/* 打卡按鈕區 */
+#statusContainer {
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    width:100%;
+}
+#statusContainer div {
+    padding:10px 15px;
+    border-radius:12px;
+    color:#fff;
+    font-size:18px;
+    font-weight:600;
+}
+#nearestCompany { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+#rangeStatus { background: linear-gradient(135deg, #3498db, #2980b9); }
+
+/* 打卡按鈕 */
 .buttons-container {
     display:flex;
     gap:10px;
@@ -101,13 +113,6 @@ body {
     width:100%; 
     box-sizing:border-box;
 }
-
-/* 響應式文字縮放 */
-@media(max-width:400px){
-    .buttons-container button{
-        font-size:20px; 
-    }
-}
 </style>
 </head>
 <body>
@@ -115,6 +120,12 @@ body {
 <div id="controlPanel">
     <div id="userInfo">正在獲取使用者資訊...</div>
     <div id="dateTime">載入中…</div>
+
+    <!-- 顯示最近公司與範圍 -->
+    <div id="statusContainer">
+        <div id="nearestCompany">不明連線</div>
+        <div id="rangeStatus">可打卡範圍 (0 公尺)</div>
+    </div>
 
     <!-- 打卡按鈕 -->
     <div class="buttons-container">
@@ -135,7 +146,7 @@ body {
 </div>
 
 <script>
-const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbxQvd9VODMrQZIA75Qsi1InVsg1wFdmrPUJfTiFTbT53XTP5sD2_VO1s_1k78A2uVnA/exec";
+const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbzB2hHIz8S6HD6vrMMcMcGZkIn2TUXITlrHzYsEActEs9LhPC2ygTmtzT-rF3dAZ0af/exec";
 let userId = "", userName = "";
 
 // 初始化使用者
@@ -167,6 +178,27 @@ async function getIP(){
         return data.ip;
     }catch{return "";}
 }
+
+// 更新最近公司 / 範圍
+async function updateStatus(){
+    const ip = await getIP();
+    if(!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(async pos=>{
+        const gps = {lat:pos.coords.latitude,lng:pos.coords.longitude};
+        try{
+            const res = await fetch(`${API_ENDPOINT}?action=check&lat=${gps.lat}&lng=${gps.lng}&ip=${ip}`);
+            const data = await res.json();
+            document.getElementById("nearestCompany").textContent = data.ipMatched ? data.nearestCompany.name : "不明連線";
+            const distText = data.distance!==null ? ` (${data.distance.toFixed(0)} 公尺)` : "";
+            document.getElementById("rangeStatus").textContent = `${data.rangeStatus}${!data.ipMatched ? distText : ""}`;
+        }catch(err){
+            document.getElementById("nearestCompany").textContent = "錯誤";
+            document.getElementById("rangeStatus").textContent = "-";
+        }
+    });
+}
+setInterval(updateStatus,5000);
+updateStatus();
 
 // 更新今日打卡紀錄
 async function updateTodayRecords(){
@@ -201,7 +233,7 @@ async function clockIn(status){
     const circle = document.getElementById("circleProgress");
     countdownWrapper.style.display = "block";
 
-    let duration = 2; // 倒數秒數
+    let duration = 2; 
     let timeLeft = duration;
     const radius = 50;
     const circumference = 2 * Math.PI * radius;
@@ -240,6 +272,7 @@ async function clockIn(status){
             countdownWrapper.style.display = "none";
             btn.textContent = originalText;
             btn.disabled = false;
+            updateStatus(); // 打卡後立即更新狀態
         }
     }, err=>{
         Swal.fire("⚠ 無法取得GPS位置");
@@ -258,10 +291,12 @@ document.getElementById("btnEnd").onclick = ()=> clockIn("下班");
 window.onload = async ()=>{
     await initUser();
     updateTodayRecords();
+    updateStatus();
 };
 </script>
 </body>
 </html>
+
 
 
 
