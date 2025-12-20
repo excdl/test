@@ -7,15 +7,14 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <style>
-body { 
-    font-family: Arial, "Noto Sans TC", sans-serif; 
-    display:flex; 
-    justify-content:center; 
-    padding:20px; 
+body {
+    font-family: Arial, "Noto Sans TC", sans-serif;
+    display:flex;
+    justify-content:center;
+    padding:20px;
     background:#f5f6fa;
     margin:0;
 }
-
 #controlPanel {
     background:white;
     padding:25px 20px;
@@ -29,32 +28,30 @@ body {
     align-items:center;
     box-sizing:border-box;
 }
-
 #userInfo { text-align:center; font-size:26px; font-weight:bold; }
 #dateTime { text-align:center; font-size:22px; }
-
 /* 狀態訊息橢圓形 */
 #statusContainer {
     display:flex;
     flex-direction:column;
     gap:10px;
-    width:80%; /* 縮小寬度 */
-    align-items:center; /* 水平置中 */
+    width:80%;
+    align-items:center;
 }
 #statusContainer div {
     width:100%;
-    max-width:300px; /* 最大寬度 */
+    max-width:300px;
     padding:8px 0;
-    border-radius:25px; /* 橢圓形 */
+    border-radius:25px;
     color:#fff;
     font-size:16px;
     font-weight:600;
-    text-align:center; /* 文字置中 */
+    text-align:center;
     box-shadow: 0 4px 10px rgba(0,0,0,0.08);
 }
-#nearestCompany { background: linear-gradient(135deg, #e74c3c, #c0392b); }
-#rangeStatus { background: linear-gradient(135deg, #3498db, #2980b9); }
-
+#rangeStatus {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+}
 /* 打卡按鈕 */
 .buttons-container {
     display:flex;
@@ -62,16 +59,16 @@ body {
     width:100%;
     flex-wrap:nowrap;
 }
-.buttons-container button { 
-    flex:1 1 0; 
+.buttons-container button {
+    flex:1 1 0;
     min-width:80px;
-    padding:10px 0; 
-    font-size:25px; 
-    border-radius:8px; 
-    cursor:pointer; 
-    font-weight:bold; 
+    padding:10px 0;
+    font-size:25px;
+    border-radius:8px;
+    cursor:pointer;
+    font-weight:bold;
     border:none;
-    white-space:nowrap; 
+    white-space:nowrap;
     transition: all 0.2s ease;
 }
 .buttons-container button:hover{
@@ -82,58 +79,54 @@ body {
     transform: translateY(1px);
     box-shadow: 0 2px 4px rgba(0,0,0,0.08);
 }
-#btnStart { background: linear-gradient(145deg, #3498db, #2980b9); color:white; } 
-#btnEnd { background: linear-gradient(145deg, #2ecc71, #27ae60); color:white; }   
-
+#btnStart { background: linear-gradient(145deg, #3498db, #2980b9); color:white; }
+#btnEnd { background: linear-gradient(145deg, #2ecc71, #27ae60); color:white; }
 /* 圓形倒數動畫 */
-#countdownWrapper { 
-    width:120px; 
-    height:120px; 
-    position:relative; 
-    display:none; 
+#countdownWrapper {
+    width:120px;
+    height:120px;
+    position:relative;
+    display:none;
 }
-#circleProgress { 
-    fill:none; 
-    stroke-width:12; 
-    stroke-linecap:round; 
-    transform: rotate(-90deg); 
-    transform-origin: 50% 50%; 
-    stroke-dasharray: 314; /* 2 * PI * 50 */
+#circleProgress {
+    fill:none;
+    stroke-width:12;
+    stroke-linecap:round;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+    stroke-dasharray: 314;
     stroke-dashoffset: 314;
     transition: stroke-dashoffset 1s linear;
     stroke: #3498db;
 }
-#countdownText { 
-    position:absolute; 
-    top:50%; 
-    left:50%; 
-    transform:translate(-50%,-50%); 
-    font-weight:bold; 
-    white-space:nowrap; 
+#countdownText {
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    font-weight:bold;
+    white-space:nowrap;
 }
-
 /* 今日打卡紀錄 */
 #todayRecords {
-    border:1px solid #ccc; 
-    border-radius:8px; 
-    padding:10px; 
-    min-height:50px; 
-    font-size:16px; 
+    border:1px solid #ccc;
+    border-radius:8px;
+    padding:10px;
+    min-height:50px;
+    font-size:16px;
     background: #fafafa;
-    width:100%; 
+    width:100%;
     box-sizing:border-box;
 }
 </style>
 </head>
 <body>
-
 <div id="controlPanel">
     <div id="userInfo">正在獲取使用者資訊...</div>
     <div id="dateTime">載入中…</div>
 
-    <!-- 顯示最近公司與範圍 -->
+    <!-- 顯示打卡範圍 -->
     <div id="statusContainer">
-        <div id="nearestCompany">不明連線</div>
         <div id="rangeStatus">可打卡範圍 (0 公尺)</div>
     </div>
 
@@ -156,7 +149,7 @@ body {
 </div>
 
 <script>
-const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbwBL2BXgosKph_MbPJ58ZB-KFHYXYFC0sG21_oygg1vecXTFrfszuYtkliTjEgeDmH1/exec";
+const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbwQ3hIsyDXdDf25b-Hx6d6VDyG4mc4e9TwVpgZgqeod5CEHuQ_LSJc5YiRKQG7pqONw/exec";
 let userId = "", userName = "";
 
 // 初始化使用者
@@ -189,21 +182,31 @@ async function getIP(){
     }catch{return "";}
 }
 
-// 更新最近公司 / 範圍
+// 更新打卡範圍
 async function updateStatus(){
     const ip = await getIP();
     if(!navigator.geolocation) return;
+
     navigator.geolocation.getCurrentPosition(async pos=>{
-        const gps = {lat:pos.coords.latitude,lng:pos.coords.longitude};
+        const gps = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+        const rangeEl = document.getElementById("rangeStatus");
         try{
             const res = await fetch(`${API_ENDPOINT}?action=check&lat=${gps.lat}&lng=${gps.lng}&ip=${ip}`);
             const data = await res.json();
-            document.getElementById("nearestCompany").textContent = data.ipMatched ? data.nearestCompany.name : "不明連線";
-            const distText = data.distance!==null ? ` (${data.distance.toFixed(0)} 公尺)` : "";
-            document.getElementById("rangeStatus").textContent = `${data.rangeStatus}${!data.ipMatched ? distText : ""}`;
+
+            if(data.ipMatched){
+                rangeEl.textContent = "有效打卡區";
+                rangeEl.style.background = "linear-gradient(135deg, #2ecc71, #27ae60)";
+            } else if(data.distance !== null && data.distance <= data.allowedDistance){
+                rangeEl.textContent = "有效打卡區";
+                rangeEl.style.background = "linear-gradient(135deg, #2ecc71, #27ae60)";
+            } else {
+                rangeEl.textContent = "無效打卡區";
+                rangeEl.style.background = "linear-gradient(135deg, #e74c3c, #c0392b)";
+            }
         }catch(err){
-            document.getElementById("nearestCompany").textContent = "錯誤";
-            document.getElementById("rangeStatus").textContent = "-";
+            rangeEl.textContent = "無法取得範圍";
+            rangeEl.style.background = "linear-gradient(135deg, #e74c3c, #c0392b)";
         }
     });
 }
@@ -218,10 +221,13 @@ async function updateTodayRecords(){
     try{
         const res = await fetch(`${API_ENDPOINT}?action=getToday&userId=${userId}&date=${today}`);
         const data = await res.json();
-        if(!data.length){ container.innerHTML = "今日打卡紀錄：無"; return; }
+        if(!data.length){
+            container.innerHTML = "今日打卡紀錄：無";
+            return;
+        }
         container.innerHTML = "今日打卡紀錄：<br>";
         data.forEach(r=>{
-            container.innerHTML += `<span>• ${r.status} ${r.time}（${r.company}）</span>`;
+            container.innerHTML += `<div>${r.status} ${r.time}（${r.company}）</div>`;
         });
     }catch{
         container.innerHTML = "今日打卡紀錄：讀取失敗";
@@ -231,7 +237,10 @@ async function updateTodayRecords(){
 // 打卡功能 + 圓形倒數動畫
 async function clockIn(status){
     const ip = await getIP();
-    if(!navigator.geolocation){ Swal.fire("⚠ 無法取得位置"); return; }
+    if(!navigator.geolocation){
+        Swal.fire("⚠ 無法取得位置");
+        return;
+    }
 
     const btn = status==="上班" ? document.getElementById("btnStart") : document.getElementById("btnEnd");
     btn.disabled = true;
@@ -243,7 +252,7 @@ async function clockIn(status){
     const text = document.getElementById("countdownText");
     countdownWrapper.style.display = "block";
 
-    const duration = 3; // 3秒倒數
+    const duration = 3;
     let elapsed = 0;
     const circumference = 2 * Math.PI * 50;
     circle.style.strokeDasharray = circumference;
@@ -254,16 +263,14 @@ async function clockIn(status){
         const progress = elapsed / duration;
         circle.style.strokeDashoffset = circumference * (1 - progress);
         text.textContent = `打卡中… ${duration - elapsed}s`;
-        if(elapsed >= duration){
-            clearInterval(interval);
-        }
-    }, 1000);
+        if(elapsed >= duration) clearInterval(interval);
+    },1000);
 
     navigator.geolocation.getCurrentPosition(async pos=>{
         const gps = {lat: pos.coords.latitude, lng: pos.coords.longitude};
         try{
             const res = await fetch(API_ENDPOINT, {
-                method: "POST",
+                method:"POST",
                 body: JSON.stringify({userId, userName, ip, gps, status})
             });
             const data = await res.json();
@@ -306,6 +313,7 @@ window.onload = async ()=>{
 </script>
 </body>
 </html>
+
 
 
 
