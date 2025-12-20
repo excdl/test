@@ -116,7 +116,6 @@ liff.init({ liffId: "2008504718-nmXP0WRV" }).then(async()=>{
 
   document.getElementById("user").textContent = `${userName} 您好`;
 
-  // ✅ 一定要在 LIFF 完成後才載入
   loadToday();
   updateStatus();
 });
@@ -147,17 +146,28 @@ async function updateStatus(){
       );
       const d=await res.json();
 
-      document.getElementById("company").textContent =
-        d.nearestCompany ? d.nearestCompany.name : "未知位置";
-
-      const distText =
-        d.distance !== null && d.distance !== 0
-          ? `（${d.distance.toFixed(0)} 公尺）`
-          : "";
-
+      const companyEl=document.getElementById("company");
       const rangeEl=document.getElementById("range");
-      rangeEl.textContent = (d.rangeStatus || "未知") + distText;
-      rangeEl.className = "range " + (d.rangeStatus && d.rangeStatus.includes("可")?"ok":"fail");
+
+      // 公司名稱顯示規則
+      companyEl.textContent = d.ipMatched && d.nearestCompany
+        ? d.nearestCompany.name
+        : "不明連線";
+
+      // 可打卡範圍判斷
+      if(d.ipMatched){
+          const distText = (d.distance!==null && d.distance>0) ? `（${d.distance.toFixed(0)} 公尺）` : "";
+          rangeEl.textContent = "可打卡範圍" + distText;
+          rangeEl.className = "range ok";
+      } else if(d.nearestCompany && d.distance!==null && d.distance <= d.nearestCompany.allow){
+          const distText = `（${d.distance.toFixed(0)} 公尺）`;
+          rangeEl.textContent = "可打卡範圍" + distText;
+          rangeEl.className = "range ok";
+      } else {
+          rangeEl.textContent = "非打卡範圍";
+          rangeEl.className = "range fail";
+      }
+
     }catch{
       document.getElementById("company").textContent="定位失敗";
       document.getElementById("range").textContent="-";
@@ -214,7 +224,7 @@ async function loadToday(){
 
   document.getElementById("today").innerHTML =
     d.length
-      ? d.map(x=>`• ${x.status} ${x.time}（${x.company}）`).join("<br>")
+      ? d.map(x=>`• ${x.status} ${x.time}（${x.company || x.nearestCompany}）`).join("<br>")
       : "今日尚無打卡紀錄";
 }
 </script>
