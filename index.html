@@ -15,7 +15,6 @@ body {
   padding: 20px;
   margin: 0;
 }
-
 .card {
   background: #fff;
   width: 95%;
@@ -28,35 +27,38 @@ body {
   gap: 20px;
   box-shadow: 0 15px 30px rgba(0,0,0,0.15);
 }
-
 #userInfo {
   font-size: 28px;
   font-weight: bold;
   text-align: center;
   color: #2c3e50;
 }
-
 #dateTime {
   font-size: 22px;
   color: #7f8c8d;
   text-align: center;
 }
-
 #statusInfo {
   font-size: 20px;
   color: white;
-  padding: 8px 25px;
-  border-radius: 25px;
+  padding: 10px 30px;
+  border-radius: 50px;
   text-align: center;
   min-width: 180px;
+  max-width: 300px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: background 0.3s;
 }
 
+/* 打卡按鈕 */
 .buttons-container {
   display: flex;
   gap: 15px;
   width: 100%;
 }
-
 .buttons-container button {
   flex: 1;
   padding: 15px 0;
@@ -71,6 +73,32 @@ body {
 #btnStart { background: linear-gradient(135deg, #3498db, #2980b9); }
 #btnEnd { background: linear-gradient(135deg, #2ecc71, #27ae60); }
 
+/* 倒數動畫 */
+#countdownWrapper {
+  width:120px;
+  height:120px;
+  position: relative;
+  display: none;
+  margin-top: 10px;
+}
+#circleProgress {
+  fill:none;
+  stroke-width:10;
+  stroke-linecap:round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  stroke: #3498db;
+}
+#countdownText {
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  font-weight:bold;
+  font-size:20px;
+}
+
+/* 今日打卡紀錄 */
 #todayRecords {
   width: 100%;
   background: #fafafa;
@@ -92,12 +120,18 @@ body {
 <div class="card">
   <div id="userInfo">載入使用者資訊中...</div>
   <div id="dateTime">載入中…</div>
-
   <div id="statusInfo">檢查中…</div>
 
   <div class="buttons-container">
     <button id="btnStart">上班</button>
     <button id="btnEnd">下班</button>
+  </div>
+
+  <div id="countdownWrapper">
+    <svg width="120" height="120">
+      <circle id="circleProgress" cx="60" cy="60" r="50"></circle>
+    </svg>
+    <div id="countdownText">3</div>
   </div>
 
   <div id="todayRecords">今日打卡紀錄（點擊更新）</div>
@@ -107,7 +141,6 @@ body {
 const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbznYlglXsowIjw2yR5t8i8rauJpDiYX97nt6cjJ0ymd6KZcvJ-6hGcI-x-5M4Y77vNs/exec";
 let userId="", userName="";
 
-// 初始化使用者
 async function initUser(){
   await liff.init({liffId:"2008504718-nmXP0WRV"});
   if(!liff.isLoggedIn()) await liff.login();
@@ -117,7 +150,6 @@ async function initUser(){
   document.getElementById("userInfo").textContent = `${userName} 您好`;
 }
 
-// 更新時間
 function updateDateTime(){
   const now = new Date();
   document.getElementById("dateTime").textContent = now.toLocaleString("zh-TW",{hour12:false});
@@ -125,7 +157,6 @@ function updateDateTime(){
 setInterval(updateDateTime,1000);
 updateDateTime();
 
-// 取得 IP
 async function getIP(){
   const cache = sessionStorage.getItem("myIP");
   if(cache) return cache;
@@ -137,7 +168,7 @@ async function getIP(){
   }catch{return "";}
 }
 
-// 更新打卡狀態顯示
+// 更新打卡範圍狀態
 async function updateStatus(){
   const ip = await getIP();
   if(!navigator.geolocation) return;
@@ -146,19 +177,16 @@ async function updateStatus(){
     try{
       const res = await fetch(`${API_ENDPOINT}?action=check&lat=${gps.lat}&lng=${gps.lng}&ip=${ip}`);
       const data = await res.json();
-
       const statusEl = document.getElementById("statusInfo");
       if(data.rangeStatus==="可打卡範圍"){
         statusEl.style.background="#2ecc71";
         statusEl.textContent="可打卡範圍";
       } else {
         statusEl.style.background="#e74c3c";
-        const distText = data.distance !== null ? ` (${data.distance} 公尺)` : "";
+        const distText = data.distance !== null ? ` (${Math.round(data.distance)} 公尺)` : "";
         statusEl.textContent="非打卡範圍" + distText;
       }
-    }catch(err){
-      console.error(err);
-    }
+    }catch(err){ console.error(err); }
   });
 }
 setInterval(updateStatus,5000);
@@ -182,29 +210,56 @@ async function updateTodayRecords(){
   }
 }
 
-// 打卡功能
+// 倒數動畫
+function startCountdown(seconds, callback){
+  const wrapper = document.getElementById("countdownWrapper");
+  const circle = document.getElementById("circleProgress");
+  const text = document.getElementById("countdownText");
+  const radius = 50;
+  const circumference = 2 * Math.PI * radius;
+  circle.style.strokeDasharray = circumference;
+  circle.style.strokeDashoffset = circumference;
+  wrapper.style.display = "block";
+
+  let current = seconds;
+  text.textContent = current;
+  const interval = setInterval(()=>{
+    current--;
+    if(current<=0){
+      clearInterval(interval);
+      wrapper.style.display="none";
+      circle.style.strokeDashoffset = circumference;
+      callback();
+    } else {
+      text.textContent = current;
+      const offset = circumference * current / seconds;
+      circle.style.strokeDashoffset = offset;
+    }
+  },1000);
+}
+
+// 上班/下班打卡
 async function clockInOut(status){
   const btn = status==="上班" ? document.getElementById("btnStart") : document.getElementById("btnEnd");
-  btn.disabled = true;
-  const ip = await getIP();
-  if(!navigator.geolocation){ Swal.fire("⚠ 無法取得位置"); btn.disabled=false; return; }
-  navigator.geolocation.getCurrentPosition(async pos=>{
-    const gps={lat:pos.coords.latitude,lng:pos.coords.longitude};
-    try{
-      const res = await fetch(API_ENDPOINT,{
-        method:"POST",
-        body: JSON.stringify({userId,userName,ip,gps,status})
-      });
-      const data = await res.json();
-      Swal.fire({icon:"success",title:data.message,html:`${data.date} ${data.time}`,timer:2000,showConfirmButton:false});
-      updateTodayRecords();
-      updateStatus();
-    }catch(err){
-      Swal.fire("⚠ 打卡失敗");
-    } finally {
-      btn.disabled=false;
-    }
-  }, err=>{Swal.fire("⚠ 無法取得GPS位置"); btn.disabled=false;});
+  btn.disabled=true;
+  startCountdown(3, async ()=>{
+    const ip = await getIP();
+    if(!navigator.geolocation){ Swal.fire("⚠ 無法取得位置"); btn.disabled=false; return; }
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      const gps={lat:pos.coords.latitude,lng:pos.coords.longitude};
+      try{
+        const res = await fetch(API_ENDPOINT,{
+          method:"POST",
+          body: JSON.stringify({userId,userName,ip,gps,status})
+        });
+        const data = await res.json();
+        Swal.fire({icon:"success",title:data.message,html:`${data.date} ${data.time}`,timer:2000,showConfirmButton:false});
+        updateTodayRecords();
+        updateStatus();
+      }catch(err){ Swal.fire("⚠ 打卡失敗"); } 
+      finally { btn.disabled=false; }
+    }, err=>{Swal.fire("⚠ 無法取得GPS位置"); btn.disabled=false;});
+  });
 }
 
 document.getElementById("btnStart").onclick = ()=>clockInOut("上班");
