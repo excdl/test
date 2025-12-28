@@ -177,13 +177,12 @@ async function updateTodayRecords(){
 }
 
 // ✅ 打卡功能（立即打卡 + 按鈕顯示倒數）
-// ✅ 打卡功能（立即打卡 + 按鈕倒數 + 放大文字）
 async function clockInOut(status) {
   const btn = status === "上班" ? document.getElementById("btnStart") : document.getElementById("btnEnd");
   btn.disabled = true;
   const originalText = btn.textContent;
 
-  // ===== UI 倒數提示（不影響打卡流程） =====
+  // UI 倒數提示
   let sec = 3;
   const timer = setInterval(() => {
     btn.textContent = `打卡中… ${sec}s`;
@@ -193,19 +192,22 @@ async function clockInOut(status) {
 
   const ip = await getIP();
 
-  // ===== 不支援 GPS =====
   if (!navigator.geolocation) {
     clearInterval(timer);
     btn.textContent = originalText;
     btn.disabled = false;
 
     Swal.fire({
-      html: '<span style="font-size:2em; color:red;">❌ 打卡失敗</span>'
+      icon: "error",
+      title: "😥 打卡失敗",
+      html: "請查看紀錄",
+      showConfirmButton: false,
+      timer: 2000,
+      backdrop: "rgba(0,0,0,0.5)"
     });
     return;
   }
 
-  // ===== 立即打卡 =====
   navigator.geolocation.getCurrentPosition(
     async pos => {
       const gps = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -215,23 +217,28 @@ async function clockInOut(status) {
           method: "POST",
           body: JSON.stringify({ userId, userName, ip, gps, status })
         });
-        const data = await res.json();
+        const apiData = await res.json();
 
         // ===== 三情境判斷 =====
-        if (data.rangeStatus === "有效打卡區") {
-          // ✅ 情境 1
+        if (apiData.rangeStatus === "有效打卡區") {
+          // ✅ 成功
           Swal.fire({
-            html: `<span style="font-size:2em; color:green;">✅ 打卡成功</span>`,
+            icon: "success",
+            title: "🎉 打卡成功！",
+            html: `<strong>打卡時間：</strong> ${apiData.date} ${apiData.time}`,
+            showConfirmButton: false,
             timer: 2000,
-            showConfirmButton: false
+            backdrop: "rgba(0,0,0,0.5)"
           });
-
-        } else if (data.rangeStatus === "無效打卡區") {
-          // ⚠️ 情境 2
+        } else if (apiData.rangeStatus === "無效打卡區") {
+          // ⚠️ 異地打卡
           Swal.fire({
-            html: `<span style="font-size:1.6em;">⚠ 請勿在無效打卡區內進行打卡<br>(異地請忽略)</span>`,
-            timer: 3000,
-            showConfirmButton: false
+            icon: "warning",
+            title: `<span style="font-size:20px;color:#e67e22;">⚠ 非公司網路</span>`,
+            html: `<div style="font-size:16px;color:#3498db;font-weight:bold;margin-top:8px;">◎ 異地打卡請忽略 ◎</div>`,
+            showConfirmButton: false,
+            timer: 2000,
+            backdrop: "rgba(0,0,0,0.5)"
           });
         }
 
@@ -241,7 +248,12 @@ async function clockInOut(status) {
       } catch {
         // ❌ 打卡失敗
         Swal.fire({
-          html: '<span style="font-size:2em; color:red;">❌ 打卡失敗</span>'
+          icon: "error",
+          title: "😥 打卡已更新",
+          html: "請查看紀錄",
+          showConfirmButton: false,
+          timer: 2000,
+          backdrop: "rgba(0,0,0,0.5)"
         });
       } finally {
         clearInterval(timer);
@@ -249,15 +261,18 @@ async function clockInOut(status) {
         btn.disabled = false;
       }
     },
-
-    // ===== GPS 取得失敗 =====
     () => {
       clearInterval(timer);
       btn.textContent = originalText;
       btn.disabled = false;
 
       Swal.fire({
-        html: '<span style="font-size:2em; color:red;">❌ 無法取得GPS位置</span>'
+        icon: "error",
+        title: "😥 打卡失敗",
+        html: "請查看紀錄",
+        showConfirmButton: false,
+        timer: 2000,
+        backdrop: "rgba(0,0,0,0.5)"
       });
     }
   );
