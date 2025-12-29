@@ -96,156 +96,144 @@ body {
 </div>
 
 <script>
-const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbxzxtOuVQKJ9qmv6cqyqnTpr3OY3VUWtxLPog-yUsm4LwlJ5quvLBCeJbErCP0b4l46/exec";
-let userId="", userName="";
+const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbyeP9GTVDZLtw-FcwzFnajxbBUmjjVQbOdTFSmoFG6j8Lzodgwkae3n4-UoWKKeaVSo/exec"; // ← 替換成你的 Apps Script Web App URL
+let userId = "", userName = "";
 
 // 初始化使用者
-async function initUser(){
-  await liff.init({liffId:"2008786085-L1CtKqqv"});
-  if(!liff.isLoggedIn()) await liff.login();
-  const profile = await liff.getProfile();
-  userId = profile.userId;
-  userName = profile.displayName;
-  document.getElementById("userInfo").textContent = `${userName} 您好`;
+async function initUser() {
+  try {
+    await liff.init({ liffId: "2008786085-L1CtKqqv" });
+    if (!liff.isLoggedIn()) await liff.login();
+    const profile = await liff.getProfile();
+    userId = profile.userId;
+    userName = profile.displayName;
+    document.getElementById("userInfo").textContent = `${userName} 您好`;
+  } catch {
+    document.getElementById("userInfo").textContent = "使用者資訊載入失敗";
+  }
 }
 
 // 時間更新
-function updateDateTime(){
+function updateDateTime() {
   const now = new Date();
   document.getElementById("dateTime").textContent =
-    now.toLocaleString("zh-TW",{hour12:false});
+    now.toLocaleString("zh-TW", { hour12: false });
 }
-setInterval(updateDateTime,1000);
+setInterval(updateDateTime, 1000);
 updateDateTime();
 
 // 取得 IP
-async function getIP(){
+async function getIP() {
   const cache = sessionStorage.getItem("myIP");
-  if(cache) return cache;
-  try{
+  if (cache) return cache;
+  try {
     const res = await fetch("https://api.ipify.org?format=json");
     const data = await res.json();
-    sessionStorage.setItem("myIP",data.ip);
+    sessionStorage.setItem("myIP", data.ip);
     return data.ip;
-  }catch{return "";}
+  } catch { return ""; }
 }
 
-// 更新打卡區域狀態
-async function updateStatus(){
+// 更新打卡狀態
+async function updateStatus() {
   const ip = await getIP();
-  if(!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(async pos=>{
-    const gps={lat:pos.coords.latitude,lng:pos.coords.longitude};
-    try{
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const gps = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    try {
       const res = await fetch(`${API_ENDPOINT}?action=check&lat=${gps.lat}&lng=${gps.lng}&ip=${ip}`);
       const data = await res.json();
       const statusEl = document.getElementById("statusInfo");
-      if(data.rangeStatus==="有效打卡區"){
-        statusEl.style.background="#2ecc71";
-        statusEl.textContent="有效打卡區";
+      if (data.rangeStatus === "有效打卡區") {
+        statusEl.style.background = "#2ecc71";
+        statusEl.textContent = "有效打卡區";
       } else {
-        statusEl.style.background="#e74c3c";
+        statusEl.style.background = "#e74c3c";
         const distText = data.distance!==null ? ` (${data.distance} 公尺)` : "";
-        statusEl.textContent="無效打卡區"+distText;
+        statusEl.textContent = "無效打卡區" + distText;
       }
-    }catch(err){
-      document.getElementById("statusInfo").textContent="檢查失敗";
+    } catch {
+      const statusEl = document.getElementById("statusInfo");
+      statusEl.style.background = "#e74c3c";
+      statusEl.textContent = "檢查失敗";
     }
   });
 }
-setInterval(updateStatus,5000);
+setInterval(updateStatus, 5000);
 updateStatus();
 
 // 今日打卡紀錄
-async function updateTodayRecords(){
+async function updateTodayRecords() {
   const today = new Date().toLocaleDateString("zh-TW",{timeZone:"Asia/Taipei"}).replace(/\//g,"-");
-  const container=document.getElementById("todayRecords");
-  container.innerHTML="載入中...";
-  try{
+  const container = document.getElementById("todayRecords");
+  container.innerHTML = "載入中...";
+  try {
     const res = await fetch(`${API_ENDPOINT}?action=getToday&userId=${userId}&date=${today}`);
     const data = await res.json();
-    if(!data.length){
-      container.innerHTML="今日打卡紀錄：無";
+    if (!Array.isArray(data)) throw new Error("格式錯誤");
+    if (data.length === 0) {
+      container.innerHTML = "今日打卡紀錄：無";
       return;
     }
-    container.innerHTML="今日打卡紀錄：<br>";
-    data.forEach(r=>{
-      const color = r.company.includes("錯誤") ? "#e74c3c" : "#2ecc71";
-      container.innerHTML+=`<span style="border-left-color:${color}">${r.status}：${r.time}（${r.company}）</span>`;
+    container.innerHTML = `今日打卡紀錄（共 ${data.length} 次）：<br>`;
+    data.forEach(r => {
+      const color = r.rangeStatus === "有效打卡區" ? "#2ecc71" : "#e74c3c";
+      container.innerHTML += `<span style="border-left:3px solid ${color};">${r.status}：${r.time}（${r.company}）</span>`;
     });
-  }catch{
-    container.innerHTML="今日打卡紀錄：讀取失敗";
+  } catch {
+    container.innerHTML = "今日打卡紀錄：讀取失敗，請稍候重試";
   }
 }
 
 // 打卡功能
-async function clockInOut(status){
-  const btn = status === "上班" ? document.getElementById("btnStart") : document.getElementById("btnEnd");
+async function clockInOut(status) {
+  const btn = status==="上班" ? document.getElementById("btnStart") : document.getElementById("btnEnd");
   btn.disabled = true;
   const originalText = btn.textContent;
+
   let sec = 3;
-  const timer = setInterval(() => {
-    btn.textContent = `打卡中… ${sec}s`;
-    sec--;
-    if(sec<0) clearInterval(timer);
-  },1000);
+  const timer = setInterval(()=>{ btn.textContent=`打卡中… ${sec}s`; sec--; if(sec<0) clearInterval(timer); },1000);
 
   const ip = await getIP();
+
   if(!navigator.geolocation){
-    clearInterval(timer);
-    btn.textContent = originalText;
-    btn.disabled = false;
-    Swal.fire({icon:"error",title:"😥 打卡失敗",timer:2000,showConfirmButton:false});
+    clearInterval(timer); btn.textContent=originalText; btn.disabled=false;
+    Swal.fire({icon:"error", title:"😥 打卡失敗", html:"請查看紀錄", timer:2000, showConfirmButton:false});
     return;
   }
 
   navigator.geolocation.getCurrentPosition(async pos=>{
-    const gps={lat:pos.coords.latitude,lng:pos.coords.longitude};
-    try{
+    const gps = { lat:pos.coords.latitude, lng:pos.coords.longitude };
+    try {
       const res = await fetch(API_ENDPOINT,{
         method:"POST",
-        body: JSON.stringify({userId,userName,ip,gps,status})
+        body: JSON.stringify({ userId,userName,ip,gps,status })
       });
       const apiData = await res.json();
 
-      // 顯示打卡成功 / 更新 / 無效
       if(apiData.rangeStatus==="有效打卡區"){
-        Swal.fire({
-          icon:"success",
-          title: apiData.message.includes("已更新") ? "✏️ 打卡已更新" : "🎉 打卡成功！",
-          html:`<strong>打卡時間：</strong> ${apiData.date} ${apiData.time}`,
-          timer:2000, showConfirmButton:false
-        });
+        Swal.fire({ icon:"success", title:"🎉 打卡成功！", html:`<strong>打卡時間：</strong> ${apiData.date} ${apiData.time}`, timer:2000, showConfirmButton:false});
       } else {
-        Swal.fire({
-          icon:"warning",
-          title:"⚠ 打卡無效",
-          html:"異地打卡請忽略",
-          timer:2000, showConfirmButton:false
-        });
+        Swal.fire({ icon:"warning", title:"⚠ 打卡無效", html:"<div style='font-size:16px;color:#3498db;font-weight:bold;margin-top:8px;'>◎ 異地打卡請忽略 ◎</div>", timer:2000, showConfirmButton:false});
       }
 
       updateTodayRecords();
       updateStatus();
     } catch {
-      Swal.fire({icon:"error",title:"😥 打卡失敗",timer:2000,showConfirmButton:false});
-    } finally{
-      clearInterval(timer);
-      btn.textContent = originalText;
-      btn.disabled = false;
+      Swal.fire({ icon:"error", title:"😥 打卡失敗", html:"請查看紀錄", timer:2000, showConfirmButton:false});
+    } finally {
+      clearInterval(timer); btn.textContent=originalText; btn.disabled=false;
     }
-  },()=>{
-    clearInterval(timer);
-    btn.textContent = originalText;
-    btn.disabled = false;
-    Swal.fire({icon:"error",title:"😥 打卡失敗",timer:2000,showConfirmButton:false});
+  }, ()=>{
+    clearInterval(timer); btn.textContent=originalText; btn.disabled=false;
+    Swal.fire({ icon:"error", title:"😥 打卡失敗", html:"請查看紀錄", timer:2000, showConfirmButton:false});
   });
 }
 
-document.getElementById("btnStart").onclick=()=>clockInOut("上班");
-document.getElementById("btnEnd").onclick=()=>clockInOut("下班");
+document.getElementById("btnStart").onclick = ()=>clockInOut("上班");
+document.getElementById("btnEnd").onclick = ()=>clockInOut("下班");
 
-window.onload=async()=>{
+window.onload = async ()=>{
   await initUser();
   updateTodayRecords();
 };
