@@ -1,279 +1,266 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>智能打卡系統</title>
+
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
 <style>
-body {font-family:"Arial","Noto Sans TC",sans-serif;background:#f0f4f8;display:flex;justify-content:center;padding:20px;margin:0;}
-.card {background:#fff;width:95%;max-width:480px;border-radius:20px;padding:25px 20px;display:flex;flex-direction:column;align-items:center;gap:20px;box-shadow:0 15px 30px rgba(0,0,0,0.15);}
-#userInfo {font-size:28px;font-weight:bold;text-align:center;color:#2c3e50;}
-#dateTime {font-size:22px;color:#7f8c8d;text-align:center;}
-#statusInfo {font-size:20px;color:white;padding:8px 25px;border-radius:25px;text-align:center;min-width:180px;}
-.buttons-container {display:flex;gap:15px;width:100%;}
-.buttons-container button {flex:1;padding:15px 0;font-size:22px;font-weight:bold;border-radius:12px;border:none;cursor:pointer;color:white;transition:all 0.2s;}
-#btnStart {background: linear-gradient(135deg, #3498db, #2980b9);}
-#btnEnd {background: linear-gradient(135deg, #2ecc71, #27ae60);}
-button:disabled {opacity:0.5;cursor:not-allowed;}
-#todayRecords {width:100%;background:#fafafa;border-radius:14px;padding:15px;border:1px solid #ddd;font-size:18px;text-align:left;}
-#todayRecords span {display:block;margin-bottom:5px;padding-left:5px;border-left:3px solid #3498db;}
+body{
+  font-family:"Arial","Noto Sans TC",sans-serif;
+  background:#f0f4f8;
+  display:flex;
+  justify-content:center;
+  padding:20px;
+  margin:0;
+}
+.card{
+  background:#fff;
+  width:95%;
+  max-width:480px;
+  border-radius:20px;
+  padding:25px 20px;
+  box-shadow:0 15px 30px rgba(0,0,0,0.15);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:18px;
+}
+#userInfo{font-size:26px;font-weight:bold;color:#2c3e50}
+#dateTime{font-size:20px;color:#7f8c8d}
+#statusInfo{
+  font-size:20px;
+  color:#fff;
+  padding:8px 25px;
+  border-radius:25px;
+  background:#95a5a6;
+}
+.buttons-container{
+  display:flex;
+  gap:15px;
+  width:100%;
+}
+button{
+  flex:1;
+  padding:15px 0;
+  font-size:22px;
+  font-weight:bold;
+  border-radius:12px;
+  border:none;
+  cursor:pointer;
+  color:#fff;
+}
+#btnStart{background:linear-gradient(135deg,#3498db,#2980b9)}
+#btnEnd{background:linear-gradient(135deg,#2ecc71,#27ae60)}
+button:disabled{opacity:0.5;cursor:not-allowed}
+#todayRecords{
+  width:100%;
+  background:#fafafa;
+  border-radius:14px;
+  padding:15px;
+  border:1px solid #ddd;
+  font-size:18px;
+}
+#todayRecords span{
+  display:block;
+  margin-bottom:6px;
+  padding-left:6px;
+  border-left:3px solid #3498db;
+}
 </style>
 </head>
+
 <body>
 <div class="card">
-  <div id="userInfo">載入使用者資訊中...</div>
+  <div id="userInfo">載入中...</div>
   <div id="statusInfo">定位確認中…</div>
-  <div id="dateTime">載入中…</div>
+  <div id="dateTime"></div>
+
   <div class="buttons-container">
     <button id="btnStart" disabled>上班</button>
     <button id="btnEnd" disabled>下班</button>
   </div>
-  <div id="todayRecords">今日打卡紀錄（點擊更新）</div>
+
+  <div id="todayRecords">今日打卡紀錄</div>
 </div>
 
 <script>
-const API_ENDPOINT="https://script.google.com/macros/s/AKfycbzfoXMyj9jmKnHv_H-1nDAUzUWqcgaUOiJzXwtQXDdPodvtOinpc84fw8ybRxHyEwMi/exec";
-let userId="", userName="", dataReady=false;
-let statusLoaded=false;
+/* =======================
+   基本設定
+======================= */
+const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbzfoXMyj9jmKnHv_H-1nDAUzUWqcgaUOiJzXwtQXDdPodvtOinpc84fw8ybRxHyEwMi/exec";
+const LIFF_ID = "2008786085-L1CtKqqv";
 
-const btnStart=document.getElementById("btnStart");
-const btnEnd=document.getElementById("btnEnd");
-const userInfo=document.getElementById("userInfo");
-const statusInfo=document.getElementById("statusInfo");
-const dateTime=document.getElementById("dateTime");
-const todayRecords=document.getElementById("todayRecords");
+let userId="", userName="";
+let locationReady=false;
+let pageReady=false;
 
-/* ===== 日期字串 yyyy/MM/dd ===== */
-function getTodayString(){
+const btnStart = document.getElementById("btnStart");
+const btnEnd   = document.getElementById("btnEnd");
+const userInfo = document.getElementById("userInfo");
+const statusInfo = document.getElementById("statusInfo");
+const dateTime = document.getElementById("dateTime");
+const todayRecords = document.getElementById("todayRecords");
+
+/* =======================
+   工具
+======================= */
+function todayStr(){
   const d=new Date();
   return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}`;
 }
 
-/* ===== 按鈕鎖定 ===== */
-function setButtonsLock(lock){
-  btnStart.disabled=lock;
-  btnEnd.disabled=lock;
+function updateClock(){
+  dateTime.textContent = new Date().toLocaleString("zh-TW",{hour12:false});
 }
+setInterval(updateClock,1000);
+updateClock();
 
-/* ===== 時間顯示 ===== */
-function updateDateTime(){
-  const now=new Date();
-  dateTime.textContent=now.toLocaleString("zh-TW",{hour12:false});
-}
-setInterval(updateDateTime,1000);
-updateDateTime();
-
-/* ===== 取得 IP ===== */
+/* =======================
+   IP & GPS（即時）
+======================= */
 async function getIP(){
-  const cache=sessionStorage.getItem("myIP");
-  if(cache) return cache;
-  try{
-    const res=await fetch("https://api.ipify.org?format=json");
-    const data=await res.json();
-    sessionStorage.setItem("myIP", data.ip);
-    return data.ip;
-  }catch{return "";}
+  const c=sessionStorage.getItem("ip");
+  if(c) return c;
+  const r=await fetch("https://api.ipify.org?format=json");
+  const d=await r.json();
+  sessionStorage.setItem("ip",d.ip);
+  return d.ip;
 }
 
-/* ===== GPS 快取 ===== */
-let lastGPS=null,lastGPSAt=0;
-function getCachedGPS(maxAge=15000){
-  return new Promise((resolve,reject)=>{
-    const now=Date.now();
-    if(lastGPS && now-lastGPSAt<maxAge){resolve(lastGPS);return;}
+function getGPS(){
+  return new Promise((res,rej)=>{
     navigator.geolocation.getCurrentPosition(
-      pos=>{lastGPS={lat:pos.coords.latitude,lng:pos.coords.longitude};lastGPSAt=Date.now();resolve(lastGPS);},
-      err=>reject(err),
-      {enableHighAccuracy:false,timeout:5000}
+      p=>res({lat:p.coords.latitude,lng:p.coords.longitude}),
+      e=>rej(e),
+      {enableHighAccuracy:false,timeout:8000}
     );
   });
 }
 
-/* ===== LIFF 使用者初始化 ===== */
+/* =======================
+   LIFF 初始化
+======================= */
 async function initUser(){
-  await liff.init({liffId:"2008786085-L1CtKqqv"});
-  if(!liff.isLoggedIn()) await liff.login();
-  const profile=await liff.getProfile();
-  userId=profile.userId;
-  userName=profile.displayName;
+  await liff.init({liffId:LIFF_ID});
+  if(!liff.isLoggedIn()) liff.login();
+  const p=await liff.getProfile();
+  userId=p.userId;
+  userName=p.displayName;
   userInfo.textContent=`${userName} 您好`;
 }
 
-/* ===== 更新打卡區狀態 ===== */
+/* =======================
+   定位狀態顯示（只顯示）
+======================= */
 async function updateStatus(){
-  statusInfo.textContent = "定位載入中…";
-  statusInfo.style.background = "#95a5a6";
-
   try{
-    const [ip, gps] = await Promise.all([getIP(), getCachedGPS()]);
-    const res = await fetch(`${API_ENDPOINT}?action=check&lat=${gps.lat}&lng=${gps.lng}&ip=${ip}`);
-    const data = await res.json();
+    const [ip,gps]=await Promise.all([getIP(),getGPS()]);
+    const r=await fetch(`${API_ENDPOINT}?action=check&lat=${gps.lat}&lng=${gps.lng}&ip=${ip}`);
+    const d=await r.json();
 
-    if(data.rangeStatus === "有效打卡區"){
-      statusInfo.style.background = "#2ecc71";
-      statusInfo.textContent = "有效打卡區";
-    } else {
-      statusInfo.style.background = "#e74c3c";
-      const distText = data.distance !== null ? ` (${data.distance} 公尺)` : "";
-      statusInfo.textContent = "無效打卡區" + distText;
+    if(d.rangeStatus==="有效打卡區"){
+      statusInfo.textContent="有效打卡區";
+      statusInfo.style.background="#2ecc71";
+    }else{
+      statusInfo.textContent=`無效打卡區${d.distance?` (${d.distance}m)`:""}`;
+      statusInfo.style.background="#e74c3c";
     }
-    statusLoaded = true;
-  } catch(err){
-    statusInfo.textContent = "定位確認中…";
-    statusInfo.style.background = "#95a5a6";
-    console.warn("更新狀態失敗：", err);
+    locationReady=true;
+    btnStart.disabled=false;
+    btnEnd.disabled=false;
+  }catch{
+    statusInfo.textContent="定位失敗";
   }
 }
 
-/* ===== 更新今日打卡紀錄 ===== */
-async function updateTodayRecords(){
-  todayRecords.innerHTML="載入中...";
-  try{
-    const res=await fetch(`${API_ENDPOINT}?action=getToday&userId=${userId}&date=${getTodayString()}`);
-    const data=await res.json();
-    if(!data.length){todayRecords.innerHTML="今日打卡紀錄：無";return;}
-    todayRecords.innerHTML="今日打卡紀錄：<br>";
-    data.forEach(r=>{
-      let color="#3498db"; // 上班藍
-      if(r.status==="下班") color="#2ecc71"; // 下班綠
-      if(r.company.includes("錯誤")) color="#e67e22"; // 異常橘
-      todayRecords.innerHTML+=`<span style="border-left-color:${color}">${r.status}：${r.time}（${r.company}）</span>`;
-    });
-  }catch{todayRecords.innerHTML="今日打卡紀錄：讀取失敗";}
-}
-
-/* ===== 打卡後發送 Flex Message 給自己 ===== */
-async function sendSelfMessage(record){
-  if(!liff.isInClient()) return;
-
-  let headerColor = "#3498db"; // 上班藍
-  if(record.status === "下班") headerColor = "#2ecc71"; // 下班綠
-  if(record.rangeStatus !== "有效打卡區") headerColor = "#e67e22"; // 異常橘
-
-  let reasonText = record.rangeStatus !== "有效打卡區" ? "異常原因：超出打卡區" : "";
-
-  try{
-    await liff.sendMessages([{
-      type:'flex',
-      altText:'打卡通知',
-      contents:{
-        type:"bubble",
-        header:{
-          type:"box",
-          layout:"vertical",
-          contents:[{
-            type:"text",
-            text:`${record.userName} 已打卡`,
-            weight:"bold",
-            size:"lg",
-            color:"#ffffff"
-          }],
-          backgroundColor: headerColor,
-          paddingAll:"12px"
-        },
-        body:{
-          type:"box",
-          layout:"vertical",
-          spacing:"md",
-          contents:[
-            {type:"text", text:`狀態：${record.status}`, size:"md"},
-            {type:"text", text:`時間：${record.date} ${record.time}`, size:"md"},
-            {type:"text", text:`位置：${record.company}`, size:"md"},
-            ...(reasonText ? [{type:"text", text: reasonText, size:"md", color:"#e67e22"}] : [])
-          ]
-        }
-      }
-    }]);
-  }catch(err){
-    console.error("訊息傳送失敗:", err);
+/* =======================
+   今日紀錄
+======================= */
+async function loadToday(){
+  todayRecords.textContent="載入中...";
+  const r=await fetch(`${API_ENDPOINT}?action=getToday&userId=${userId}&date=${todayStr()}`);
+  const d=await r.json();
+  if(!d.length){
+    todayRecords.textContent="今日無紀錄";
+    return;
   }
+  todayRecords.innerHTML="今日打卡紀錄：<br>";
+  d.forEach(x=>{
+    let c=x.status==="下班"?"#2ecc71":"#3498db";
+    if(x.company.includes("錯誤")) c="#e67e22";
+    todayRecords.innerHTML+=
+      `<span style="border-left-color:${c}">${x.status}：${x.time}（${x.company}）</span>`;
+  });
 }
 
-/* ===== 打卡功能 ===== */
-async function clockInOut(status){
-  if(!dataReady || !statusLoaded){
-    Swal.fire({icon:"info",title:"資料讀取中或定位中",timer:1500,showConfirmButton:false});
+/* =======================
+   打卡（核心）
+======================= */
+async function clock(status){
+  if(!locationReady){
+    Swal.fire({icon:"info",title:"定位中，請稍候",timer:1500,showConfirmButton:false});
     return;
   }
 
   const btn = status==="上班"?btnStart:btnEnd;
-  btn.disabled = true;
-  const originalText = btn.textContent;
-
-  let sec = 3;
-  const timer = setInterval(()=>{
-    btn.textContent = `打卡中… ${sec}s`;
-    sec--;
-    if(sec<0) clearInterval(timer);
-  },1000);
+  btn.disabled=true;
 
   try{
-    const ip = await getIP();
-    const gps = await getCachedGPS();
-
-    const res = await fetch(API_ENDPOINT, {
+    const [ip,gps]=await Promise.all([getIP(),getGPS()]);
+    const r=await fetch(API_ENDPOINT,{
       method:"POST",
-      body: JSON.stringify({userId,userName,ip,gps,status})
+      body:JSON.stringify({userId,userName,ip,gps,status})
     });
-    const data = await res.json();
+    const d=await r.json();
 
-    const record = {
-      userName: userName,
-      status: data.status,
-      date: data.date,
-      time: data.time,
-      company: data.company || "未知",
-      rangeStatus: data.rangeStatus
-    };
+    if(d.error){
+      Swal.fire({icon:"warning",title:d.message});
+      return;
+    }
 
-    if(data.rangeStatus === "有效打卡區"){
+    if(d.rangeStatus==="有效打卡區"){
       Swal.fire({
         icon:"success",
-        title:"🎉 打卡成功！",
-        html:`<strong>打卡時間：</strong> ${data.date} ${data.time}`,
-        showConfirmButton:false,
+        title:"🎉 打卡成功",
+        html:`${d.date} ${d.time}`,
         timer:2000,
-        backdrop:"rgba(0,0,0,0.5)"
+        showConfirmButton:false
       });
-    } else {
+    }else{
       Swal.fire({
         icon:"warning",
-        title:`<span style="font-size:20px;color:#e67e22;">⚠ 打卡無效</span>`,
-        html:`<div style="font-size:16px;color:#3498db;font-weight:bold;margin-top:8px;">◎ 異地打卡請忽略 ◎</div>`,
-        showConfirmButton:false,
+        title:"⚠ 打卡無效",
+        html:"異地打卡請忽略",
         timer:2000,
-        backdrop:"rgba(0,0,0,0.5)"
+        showConfirmButton:false
       });
     }
 
-    sendSelfMessage(record);
-    updateTodayRecords();
+    loadToday();
     updateStatus();
 
-  }catch(err){
-    console.error(err);
-    Swal.fire({icon:"error",title:"😥 打卡失敗",html:"請查看紀錄",showConfirmButton:false,timer:2000,backdrop:"rgba(0,0,0,0.5)"});
-  } finally {
-    clearInterval(timer);
-    btn.textContent = originalText;
-    btn.disabled = false;
+  }catch{
+    Swal.fire({icon:"error",title:"打卡失敗"});
+  }finally{
+    btn.disabled=false;
   }
 }
 
-btnStart.onclick = () => clockInOut("上班");
-btnEnd.onclick = () => clockInOut("下班");
+btnStart.onclick=()=>clock("上班");
+btnEnd.onclick=()=>clock("下班");
 
-/* ===== 頁面載入 ===== */
-window.onload = async()=>{
-  setButtonsLock(true);
+/* =======================
+   啟動
+======================= */
+window.onload=async()=>{
   await initUser();
-  setButtonsLock(false);
-  updateTodayRecords();
+  pageReady=true;
+  loadToday();
   updateStatus();
-  dataReady = true;
-  setInterval(updateStatus,15000);
 };
 </script>
 </body>
