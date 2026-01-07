@@ -17,8 +17,9 @@ body {font-family:"Arial","Noto Sans TC",sans-serif;background:#f0f4f8;display:f
 #btnStart {background: linear-gradient(135deg, #3498db, #2980b9);}
 #btnEnd {background: linear-gradient(135deg, #2ecc71, #27ae60);}
 button:disabled {opacity:0.5;cursor:not-allowed;}
-#todayRecords {width:100%;background:#fafafa;border-radius:14px;padding:15px;border:1px solid #ddd;font-size:18px;text-align:left;}
+#todayRecords {width:100%;background:#fafafa;border-radius:14px;padding:15px;border:1px solid #ddd;font-size:18px;text-align:left;cursor:pointer;}
 #todayRecords span {display:block;margin-bottom:5px;padding-left:5px;border-left:3px solid #3498db;}
+#todayRecords:hover {background:#f0f0f0;}
 </style>
 </head>
 <body>
@@ -30,7 +31,7 @@ button:disabled {opacity:0.5;cursor:not-allowed;}
     <button id="btnStart" disabled>上班</button>
     <button id="btnEnd" disabled>下班</button>
   </div>
-  <div id="todayRecords">今日打卡紀錄（點擊更新）</div>
+  <div id="todayRecords" title="點擊可刷新今日打卡紀錄">今日打卡紀錄（點擊更新）</div>
 </div>
 
 <script>
@@ -127,22 +128,55 @@ async function updateStatus(){
   }
 }
 
-/* ===== 更新今日打卡紀錄 ===== */
+/* ===== 更新今日打卡紀錄（僅顯示 1 上班 + 1 下班）===== */
 async function updateTodayRecords(){
   todayRecords.innerHTML="載入中...";
   try{
     const res=await fetch(`${API_ENDPOINT}?action=getToday&userId=${userId}&date=${getTodayString()}`);
-    const data=await res.json();
-    if(!data.length){todayRecords.innerHTML="今日打卡紀錄：無";return;}
-    todayRecords.innerHTML="今日打卡紀錄：<br>";
-    data.forEach(r=>{
-      let color="#3498db"; // 上班藍
-      if(r.status==="下班") color="#2ecc71"; // 下班綠
-      if(r.company.includes("錯誤")) color="#e67e22"; // 異常橘
-      todayRecords.innerHTML+=`<span style="border-left-color:${color}">${r.status}：${r.time}（${r.company}）</span>`;
-    });
-  }catch{todayRecords.innerHTML="今日打卡紀錄：讀取失敗";}
+    const list=await res.json();
+    if(!list.length){todayRecords.innerHTML="今日打卡紀錄：無（點擊刷新）";return;}
+
+    const valid   = list.filter(r => r.rangeStatus === "有效打卡區");
+    const invalid = list.filter(r => r.rangeStatus !== "有效打卡區");
+
+    // 上班：最早有效或無效
+    let clockIn = null;
+    const inValid = valid.filter(r => r.status==="上班");
+    if(inValid.length) clockIn = inValid.reduce((a,b)=>a.time < b.time ? a:b);
+    else{
+      const inInvalid = invalid.filter(r=>r.status==="上班");
+      if(inInvalid.length) clockIn = inInvalid.reduce((a,b)=>a.time < b.time ? a:b);
+    }
+
+    // 下班：最晚有效或無效
+    let clockOut = null;
+    const outValid = valid.filter(r => r.status==="下班");
+    if(outValid.length) clockOut = outValid.reduce((a,b)=>a.time > b.time ? a:b);
+    else{
+      const outInvalid = invalid.filter(r=>r.status==="下班");
+      if(outInvalid.length) clockOut = outInvalid.reduce((a,b)=>a.time > b.time ? a:b);
+    }
+
+    todayRecords.innerHTML="今日打卡紀錄（點擊刷新）：<br>";
+
+    if(clockIn){
+      const color = clockIn.rangeStatus==="有效打卡區"?"#3498db":"#e67e22";
+      todayRecords.innerHTML+=`<span style="border-left-color:${color}">上班：${clockIn.time}（${clockIn.rangeStatus==="有效打卡區"?clockIn.company:"錯誤-異地請忽略"}）</span>`;
+    }
+
+    if(clockOut){
+      const color = clockOut.rangeStatus==="有效打卡區"?"#2ecc71":"#e67e22";
+      todayRecords.innerHTML+=`<span style="border-left-color:${color}">下班：${clockOut.time}（${clockOut.rangeStatus==="有效打卡區"?clockOut.company:"錯誤-異地請忽略"}）</span>`;
+    }
+
+  }catch(err){
+    console.error(err);
+    todayRecords.innerHTML="今日打卡紀錄：讀取失敗（點擊刷新）";
+  }
 }
+
+// 點擊今日紀錄刷新
+todayRecords.onclick = updateTodayRecords;
 
 /* ===== 打卡後發送 Flex Message 給自己 ===== */
 async function sendSelfMessage(record){
