@@ -135,17 +135,25 @@ async function updateStatus(){
 async function updateTodayRecords(){
   todayRecords.innerHTML="載入中...";
   try{
-    const res=await fetch(`${API_ENDPOINT}?action=getToday&userId=${userId}&date=${getTodayString()}`);
-    const data=await res.json();
-    if(!data.length){todayRecords.innerHTML="今日打卡紀錄：無";return;}
+    const res = await fetch(`${API_ENDPOINT}?action=getToday&userId=${userId}&date=${getTodayString()}`);
+    const data = await res.json();
+
+    if(!data.length){
+      todayRecords.innerHTML="今日打卡紀錄：無";
+      return;
+    }
+
     todayRecords.innerHTML="今日打卡紀錄：<br>";
+
     data.forEach(r=>{
       let color="#3498db"; // 上班藍
       if(r.status==="下班") color="#2ecc71"; // 下班綠
       if(r.company.includes("錯誤")) color="#e67e22"; // 異常橘
       todayRecords.innerHTML+=`<span style="border-left-color:${color}">${r.status}：${r.time}（${r.company}）</span>`;
     });
-  }catch{todayRecords.innerHTML="今日打卡紀錄：讀取失敗";}
+  }catch{
+    todayRecords.innerHTML="今日打卡紀錄：讀取失敗";
+  }
 }
 
 /* ===== 打卡後發送 Flex Message 給自己 ===== */
@@ -223,42 +231,56 @@ async function clockInOut(status){
     });
     const data = await res.json();
 
-    const record = {
-      userName: userName,
-      status: data.status,
-      date: data.date,
-      time: data.time,
-      company: data.company || "未知",
-      rangeStatus: data.rangeStatus
-    };
+    // 判斷是否有「實際更新/有效打卡」
+    const updated = data.message && !data.message.includes("未更新");
+    const validRange = data.rangeStatus === "有效打卡區";
 
-    if(data.rangeStatus === "有效打卡區"){
-      Swal.fire({
-        icon:"success",
-        title:"🎉 打卡成功！",
-        html:`<strong>打卡時間：</strong> ${data.date} ${data.time}`,
-        showConfirmButton:false,
-        timer:2000,
-        backdrop:"rgba(0,0,0,0.5)"
-      });
-    } else {
-      Swal.fire({
-        icon:"warning",
-        title:`<span style="font-size:20px;color:#e67e22;">⚠ 打卡無效</span>`,
-        html:`<div style="font-size:16px;color:#3498db;font-weight:bold;margin-top:8px;">◎ 異地打卡請忽略 ◎</div>`,
-        showConfirmButton:false,
-        timer:2000,
-        backdrop:"rgba(0,0,0,0.5)"
-      });
+    // 只有有效打卡或更新才顯示訊息
+    if(updated || validRange){
+      const record = {
+        userName: userName,
+        status: data.status,
+        date: data.date,
+        time: data.time,
+        company: data.company || "未知",
+        rangeStatus: data.rangeStatus
+      };
+
+      if(validRange){
+        Swal.fire({
+          icon:"success",
+          title:"🎉 打卡成功！",
+          html:`<strong>打卡時間：</strong> ${data.date} ${data.time}`,
+          showConfirmButton:false,
+          timer:2000,
+          backdrop:"rgba(0,0,0,0.5)"
+        });
+      } else {
+        Swal.fire({
+          icon:"warning",
+          title:`<span style="font-size:20px;color:#e67e22;">⚠ 打卡無效</span>`,
+          html:`<div style="font-size:16px;color:#3498db;font-weight:bold;margin-top:8px;">◎ 異地打卡請忽略 ◎</div>`,
+          showConfirmButton:false,
+          timer:2000,
+          backdrop:"rgba(0,0,0,0.5)"
+        });
+      }
+
+      sendSelfMessage(record);
+      updateTodayRecords();
+      updateStatus();
     }
-
-    sendSelfMessage(record);
-    updateTodayRecords();
-    updateStatus();
-
+    // ❌ 若打卡失敗或不更新，前端不跳訊息
   }catch(err){
     console.error(err);
-    Swal.fire({icon:"error",title:"😥 打卡失敗",html:"請查看紀錄",showConfirmButton:false,timer:2000,backdrop:"rgba(0,0,0,0.5)"});
+    Swal.fire({
+      icon:"error",
+      title:"😥 打卡失敗",
+      html:"請查看紀錄",
+      showConfirmButton:false,
+      timer:2000,
+      backdrop:"rgba(0,0,0,0.5)"
+    });
   } finally {
     clearInterval(timer);
     btn.textContent = originalText;
@@ -268,6 +290,7 @@ async function clockInOut(status){
 
 btnStart.onclick = () => clockInOut("上班");
 btnEnd.onclick = () => clockInOut("下班");
+
 
 /* ===== 頁面載入 ===== */
 window.onload = async()=>{
