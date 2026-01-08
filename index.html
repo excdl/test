@@ -34,7 +34,7 @@ button:disabled {opacity:0.5;cursor:not-allowed;}
 </div>
 
 <script>
-const API_ENDPOINT="https://script.google.com/macros/s/AKfycbxeMjk-3N7bFrt2VsCNv8YwlCPCDUp33qg_n9SvoTKjYL-J6FiY7KEmSSayaZyKYWCt/exec";
+const API_ENDPOINT="https://script.google.com/macros/s/AKfycbycsYhLloOMApQbtYVMzm00sWMJ_SMim08iUcbM5MOutEmqRsE-L2Qn1Dp07_EvmASh/exec";
 let userId="", userName="", dataReady=false;
 let statusLoaded=false;
 
@@ -231,12 +231,10 @@ async function clockInOut(status){
     });
     const data = await res.json();
 
-    // 判斷是否有「實際更新/有效打卡」
-    const updated = data.message && !data.message.includes("未更新");
-    const validRange = data.rangeStatus === "有效打卡區";
+    // 只有真正更新或新增才發訊息
+    const actuallyUpdated = data.message && (data.message.includes("已更新") || data.message.includes("成功"));
 
-    // 只有有效打卡或更新才顯示訊息
-    if(updated || validRange){
+    if(actuallyUpdated){
       const record = {
         userName: userName,
         status: data.status,
@@ -246,7 +244,7 @@ async function clockInOut(status){
         rangeStatus: data.rangeStatus
       };
 
-      if(validRange){
+      if(data.rangeStatus === "有效打卡區"){
         Swal.fire({
           icon:"success",
           title:"🎉 打卡成功！",
@@ -270,7 +268,7 @@ async function clockInOut(status){
       updateTodayRecords();
       updateStatus();
     }
-    // ❌ 若打卡失敗或不更新，前端不跳訊息
+    // ❌ 未更新不跳提示、不發訊息
   }catch(err){
     console.error(err);
     Swal.fire({
@@ -290,7 +288,6 @@ async function clockInOut(status){
 
 btnStart.onclick = () => clockInOut("上班");
 btnEnd.onclick = () => clockInOut("下班");
-
 
 /* ===== 頁面載入 ===== */
 window.onload = async()=>{
