@@ -131,6 +131,7 @@ async function updateStatus(){
 }
 
 /* ===== 更新今日打卡紀錄 ===== */
+/* ===== 更新今日打卡紀錄 ===== */
 async function updateTodayRecords(){
   todayRecords.innerHTML="載入中...";
   try{
@@ -142,18 +143,20 @@ async function updateTodayRecords(){
       return;
     }
 
-    todayRecords.innerHTML="今日打卡紀錄：<br>";
+    todayRecords.innerHTML="今日打卡紀錄：";
 
     data.forEach(r=>{
       let color="#3498db"; // 上班藍
       if(r.status==="下班") color="#2ecc71"; // 下班綠
       if(r.company.includes("錯誤")) color="#e67e22"; // 異常橘
-      todayRecords.innerHTML+=`<span style="border-left-color:${color}">${r.status}：${r.time}（${r.company}）</span><br>`;
+      // 原本緊湊風格，用 span 並排，中間加空格
+      todayRecords.innerHTML+=` <span style="border-left:4px solid ${color};padding-left:4px;margin-right:8px;">${r.status}：${r.time}（${r.company}）</span>`;
     });
   }catch{
     todayRecords.innerHTML="今日打卡紀錄：讀取失敗";
   }
 }
+
 
 /* ===== 打卡後發送 Flex Message 給自己 ===== */
 async function sendSelfMessage(record){
