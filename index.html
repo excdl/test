@@ -19,6 +19,25 @@ body {font-family:"Arial","Noto Sans TC",sans-serif;background:#f0f4f8;display:f
 button:disabled {opacity:0.5;cursor:not-allowed;}
 #todayRecords {width:100%;background:#fafafa;border-radius:14px;padding:15px;border:1px solid #ddd;font-size:18px;text-align:left;}
 #todayRecords span {display:block;margin-bottom:5px;padding-left:5px;border-left:3px solid #3498db;}
+/* 主管審批按鈕 */
+#btnApprove {
+    margin-top:10px;
+    padding:12px 20px;
+    font-size:18px;
+    font-weight:bold;
+    border-radius:10px;
+    background:linear-gradient(145deg,#8e44ad,#663399);
+    color:white;
+    display:none;
+    width:100%;
+    cursor:pointer;
+    border:none;
+}
+#btnApprove:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
 </style>
 </head>
 <body>
@@ -32,7 +51,7 @@ button:disabled {opacity:0.5;cursor:not-allowed;}
   </div>
   <div id="todayRecords">今日打卡紀錄（點擊更新）</div>
 </div>
-
+ <button id="btnApprove">簽核</button>
 <script>
 const API_ENDPOINT="https://script.google.com/macros/s/AKfycbycsYhLloOMApQbtYVMzm00sWMJ_SMim08iUcbM5MOutEmqRsE-L2Qn1Dp07_EvmASh/exec";
 let userId="", userName="", dataReady=false;
@@ -44,7 +63,10 @@ const userInfo=document.getElementById("userInfo");
 const statusInfo=document.getElementById("statusInfo");
 const dateTime=document.getElementById("dateTime");
 const todayRecords=document.getElementById("todayRecords");
-
+// ===== 主管 USER_ID（請填入你的主管 LINE userId）=====
+const MANAGERS = [
+    "U76174e2a9654ab2c7b1f037b28cb6c86","U7fdf4fbd467b9a93a23fac01ed03351b"
+];
 /* ===== 日期字串 yyyy/MM/dd ===== */
 function getTodayString(){
   const d=new Date();
@@ -100,7 +122,9 @@ async function initUser(){
   userName=profile.displayName;
   userInfo.textContent=`${userName} 您好`;
 }
-
+ // 管理員按鈕
+    document.getElementById("btnApprove").style.display =
+        MANAGERS.includes(window.userId) ? "block" : "none";
 /* ===== 更新打卡區狀態 ===== */
 async function updateStatus(){
   // 初始占位，灰色提示詞
@@ -288,7 +312,9 @@ async function clockInOut(status){
 
 btnStart.onclick = () => clockInOut("上班");
 btnEnd.onclick = () => clockInOut("下班");
-
+document.getElementById("btnApprove").onclick = () => {
+    window.location.href = "https://script.google.com/macros/s/AKfycbyxXrvVxfgwrI-SdXM03QEYxEpG-xqyjVQcxdNz1IBK3DtFC-kUFjHhRaNtgXNU-Mdu/exec";
+};
 /* ===== 頁面載入 ===== */
 window.onload = async()=>{
   setButtonsLock(true);
@@ -302,7 +328,6 @@ window.onload = async()=>{
 </script>
 </body>
 </html>
-
 
 
 
