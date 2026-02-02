@@ -54,7 +54,7 @@ button:disabled {opacity:0.5;cursor:not-allowed;}
 </div>
  
 <script>
-const API_ENDPOINT="https://script.google.com/macros/s/AKfycbyVGYKgjeRi0LvNvBqRlq8QsooDgc1BC-W3oBWZeilKKC_pZ27KhPPN48RkCJhhczQ/exec";
+const API_ENDPOINT="https://script.google.com/macros/s/AKfycbycsYhLloOMApQbtYVMzm00sWMJ_SMim08iUcbM5MOutEmqRsE-L2Qn1Dp07_EvmASh/exec";
 let userId="", userName="", dataReady=false;
 let statusLoaded=false;
 
@@ -64,14 +64,10 @@ const userInfo=document.getElementById("userInfo");
 const statusInfo=document.getElementById("statusInfo");
 const dateTime=document.getElementById("dateTime");
 const todayRecords=document.getElementById("todayRecords");
-async function checkIsManager(){
-  const res = await fetch(
-    `${API_ENDPOINT}?action=isManager&userId=${userId}`
-  );
-  const data = await res.json();
-  return data.isManager === true;
-}
-
+// ===== 主管 USER_ID（請填入你的主管 LINE userId）=====
+const MANAGERS = [
+    "U8548bb876dda1d67c87170aba8b518f7","U10fee4a9c1cb88e07f7e4c5e35e74100"
+];
 /* ===== 日期字串 yyyy/MM/dd ===== */
 function getTodayString(){
   const d=new Date();
@@ -133,11 +129,10 @@ async function initUser(){
   userInfo.textContent = `${userName} 您好`;
 
   console.log("LIFF userId =", userId);
+  console.log("MANAGERS =", MANAGERS);
+  console.log("是否主管 =", MANAGERS.includes(userId));
 
-  const isManager = await checkIsManager();
-  console.log("是否主管 =", isManager);
-
-  if (isManager) {
+  if (MANAGERS.includes(userId)) {
     document.getElementById("btnApprove").style.display = "block";
   }
 }
@@ -345,6 +340,7 @@ window.onload = async()=>{
 </script>
 </body>
 </html>
+
 
 
 
