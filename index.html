@@ -50,7 +50,7 @@ button:disabled {opacity:0.5;cursor:not-allowed;}
     <button id="btnEnd" disabled>下班</button>
   </div>
   <div id="todayRecords">今日打卡紀錄（點擊更新）</div>
-  <button id="btnApprove">查看 | 簽核</button>
+  <button id="btnApprove">查核考勤</button>
 </div>
  
 <script>
@@ -97,37 +97,28 @@ function updateDateTime(){
 setInterval(updateDateTime,1000);
 updateDateTime();
 
-/* ===== 快取 IP 與 GPS ===== */
-let lastGPS = null, lastGPSAt = 0;
-let lastIP = null;
-
-async function getCachedIP() {
-  if (lastIP) return lastIP;
-  try {
-    const res = await fetch("https://api.ipify.org?format=json");
-    const data = await res.json();
-    lastIP = data.ip;
-    return lastIP;
-  } catch {
-    return "";
-  }
+/* ===== 取得 IP ===== */
+async function getIP(){
+  const cache=sessionStorage.getItem("myIP");
+  if(cache) return cache;
+  try{
+    const res=await fetch("https://api.ipify.org?format=json");
+    const data=await res.json();
+    sessionStorage.setItem("myIP", data.ip);
+    return data.ip;
+  }catch{return "";}
 }
 
-function getCachedGPS(maxAge = 60000) { // 快取 1 分鐘
-  return new Promise((resolve, reject) => {
-    const now = Date.now();
-    if (lastGPS && now - lastGPSAt < maxAge) {
-      resolve(lastGPS);
-      return;
-    }
+/* ===== GPS 快取 ===== */
+let lastGPS=null,lastGPSAt=0;
+function getCachedGPS(maxAge=15000){
+  return new Promise((resolve,reject)=>{
+    const now=Date.now();
+    if(lastGPS && now-lastGPSAt<maxAge){resolve(lastGPS);return;}
     navigator.geolocation.getCurrentPosition(
-      pos => {
-        lastGPS = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        lastGPSAt = Date.now();
-        resolve(lastGPS);
-      },
-      err => reject(err),
-      { enableHighAccuracy: false, timeout: 3000 } // timeout 改 3 秒
+      pos=>{lastGPS={lat:pos.coords.latitude,lng:pos.coords.longitude};lastGPSAt=Date.now();resolve(lastGPS);},
+      err=>reject(err),
+      {enableHighAccuracy:false,timeout:5000}
     );
   });
 }
@@ -159,18 +150,18 @@ async function initUser(){
 
 
 /* ===== 更新打卡區狀態 ===== */
-async function updateStatus() {
-  // 先立即顯示 UI，不等待 GPS
+async function updateStatus(){
+  // 初始占位，灰色提示詞
   statusInfo.textContent = "定位載入中…";
   statusInfo.style.background = "#95a5a6";
 
-  try {
-    const [ip, gps] = await Promise.all([getCachedIP(), getCachedGPS()]);
+  try{
+    const [ip, gps] = await Promise.all([getIP(), getCachedGPS()]);
 
     const res = await fetch(`${API_ENDPOINT}?action=check&lat=${gps.lat}&lng=${gps.lng}&ip=${ip}`);
     const data = await res.json();
 
-    if (data.rangeStatus === "有效打卡區") {
+    if(data.rangeStatus === "有效打卡區"){
       statusInfo.style.background = "#2ecc71";
       statusInfo.textContent = "有效打卡區";
     } else {
@@ -180,15 +171,14 @@ async function updateStatus() {
     }
 
     statusLoaded = true;
-  } catch(err) {
+
+  } catch(err){
     // 失敗時保留灰色提示
     statusInfo.textContent = "定位確認中…";
     statusInfo.style.background = "#95a5a6";
     console.warn("更新狀態失敗：", err);
   }
 }
-
-
 /* ===== 更新今日打卡紀錄 ===== */
 async function updateTodayRecords(){
   todayRecords.innerHTML="載入中...";
@@ -350,26 +340,19 @@ document.getElementById("btnApprove").onclick = () => {
     window.location.href = "https://script.google.com/macros/s/AKfycbwWOaYQXY634RpY38RzJlPYxIrErb0Yl6mAffPPYd_XlhDFcKHyvQwZEoMtmjskO7iQEw/exec";
 };
 /* ===== 頁面載入 ===== */
-window.onload = async () => {
-  // 頁面一開啟就先顯示文字
-  statusInfo.textContent = "定位載入中…";
-  statusInfo.style.background = "#95a5a6";
-
+window.onload = async()=>{
   setButtonsLock(true);
   await initUser();
-
-  // 秒呈現 UI
-  updateTodayRecords();
   setButtonsLock(false);
-  dataReady = true;
-
-  // 後台慢慢更新定位與狀態
+  updateTodayRecords();
   updateStatus();
-  setInterval(updateStatus, 15000); // 每 15 秒更新
+  dataReady = true;
+  setInterval(updateStatus,15000);
 };
 </script>
 </body>
 </html>
+
 
 
 
