@@ -50,7 +50,7 @@ button:disabled {opacity:0.5;cursor:not-allowed;}
     <button id="btnEnd" disabled>下班</button>
   </div>
   <div id="todayRecords">今日打卡紀錄（點擊更新）</div>
-  <button id="btnApprove">查核考勤</button>
+  <button id="btnApprove">查看 | 簽核</button>
 </div>
  
 <script>
@@ -340,14 +340,22 @@ document.getElementById("btnApprove").onclick = () => {
     window.location.href = "https://script.google.com/macros/s/AKfycbwWOaYQXY634RpY38RzJlPYxIrErb0Yl6mAffPPYd_XlhDFcKHyvQwZEoMtmjskO7iQEw/exec";
 };
 /* ===== 頁面載入 ===== */
-window.onload = async()=>{
+window.onload = async () => {
+  // 頁面一開啟就先顯示文字
+  statusInfo.textContent = "定位載入中…";
+  statusInfo.style.background = "#95a5a6";
+
   setButtonsLock(true);
   await initUser();
-  setButtonsLock(false);
+
+  // 秒呈現 UI
   updateTodayRecords();
-  updateStatus();
+  setButtonsLock(false);
   dataReady = true;
-  setInterval(updateStatus,15000);
+
+  // 後台慢慢更新定位與狀態
+  updateStatus();
+  setInterval(updateStatus, 15000); // 每 15 秒更新
 };
 </script>
 </body>
