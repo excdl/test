@@ -54,9 +54,10 @@ button:disabled {opacity:0.5;cursor:not-allowed;}
 </div>
  
 <script>
-const API_ENDPOINT="https://script.google.com/macros/s/AKfycbycsYhLloOMApQbtYVMzm00sWMJ_SMim08iUcbM5MOutEmqRsE-L2Qn1Dp07_EvmASh/exec";
+const API_ENDPOINT="https://script.google.com/macros/s/AKfycbzLcs1OLNLhvDAih2we9zSxZYhO4t4yBGVzEaeE90iaPkkPNMoJhJfRRjlzmlA_EhW1/exec";
 let userId="", userName="", dataReady=false;
 let statusLoaded=false;
+let MANAGERS = [];
 
 const btnStart=document.getElementById("btnStart");
 const btnEnd=document.getElementById("btnEnd");
@@ -64,10 +65,18 @@ const userInfo=document.getElementById("userInfo");
 const statusInfo=document.getElementById("statusInfo");
 const dateTime=document.getElementById("dateTime");
 const todayRecords=document.getElementById("todayRecords");
-// ===== 主管 USER_ID（請填入你的主管 LINE userId）=====
-const MANAGERS = [
-    "U8548bb876dda1d67c87170aba8b518f7","U10fee4a9c1cb88e07f7e4c5e35e74100"
-];
+
+async function loadManagers(){
+  try{
+    const res = await fetch(`${API_ENDPOINT}?action=getManagers`);
+    MANAGERS = await res.json();
+    console.log("主管清單 =", MANAGERS);
+  }catch(err){
+    console.error("讀取主管失敗", err);
+    MANAGERS = [];
+  }
+}
+    
 /* ===== 日期字串 yyyy/MM/dd ===== */
 function getTodayString(){
   const d=new Date();
@@ -128,14 +137,17 @@ async function initUser(){
 
   userInfo.textContent = `${userName} 您好`;
 
+  // ⭐ 先讀主管清單
+  await loadManagers();
+
   console.log("LIFF userId =", userId);
-  console.log("MANAGERS =", MANAGERS);
   console.log("是否主管 =", MANAGERS.includes(userId));
 
   if (MANAGERS.includes(userId)) {
     document.getElementById("btnApprove").style.display = "block";
   }
 }
+
 
 /* ===== 更新打卡區狀態 ===== */
 async function updateStatus(){
