@@ -159,7 +159,6 @@ async function initUser(){
 
 
 /* ===== 更新打卡區狀態 ===== */
-/* ===== 更新打卡區狀態 ===== */
 async function updateStatus() {
   // 先立即顯示 UI，不等待 GPS
   statusInfo.textContent = "定位載入中…";
@@ -352,10 +351,14 @@ document.getElementById("btnApprove").onclick = () => {
 };
 /* ===== 頁面載入 ===== */
 window.onload = async () => {
+  // 頁面一開啟就先顯示文字
+  statusInfo.textContent = "定位載入中…";
+  statusInfo.style.background = "#95a5a6";
+
   setButtonsLock(true);
   await initUser();
 
-  // 先呈現 UI，不等定位
+  // 秒呈現 UI
   updateTodayRecords();
   setButtonsLock(false);
   dataReady = true;
