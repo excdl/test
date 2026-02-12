@@ -104,8 +104,6 @@ setInterval(updateDateTime,1000);
 updateDateTime();
 
 /* ===== 取得 IP ===== */
-let cachedIP = "";
-
 async function preloadIP(){
   try{
     const res=await fetch("https://api.ipify.org?format=json");
