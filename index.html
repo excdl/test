@@ -98,28 +98,50 @@ setInterval(updateDateTime,1000);
 updateDateTime();
 
 /* ===== 取得 IP ===== */
-async function getIP(){
-  const cache=sessionStorage.getItem("myIP");
-  if(cache) return cache;
+let cachedIP = "";
+
+async function preloadIP(){
   try{
     const res=await fetch("https://api.ipify.org?format=json");
     const data=await res.json();
-    sessionStorage.setItem("myIP", data.ip);
-    return data.ip;
-  }catch{return "";}
+    cachedIP = data.ip;
+  }catch{}
 }
 
-/* ===== GPS 快取 ===== */
-let lastGPS=null,lastGPSAt=0;
-function getCachedGPS(maxAge=15000){
+function getIP(){
+  return cachedIP || "";
+}
+
+/* ===== 常駐 GPS (秒回) ===== */
+let lastGPS = null;
+
+function initGPSWatcher(){
+  if(!navigator.geolocation) return;
+
+  navigator.geolocation.watchPosition(
+    pos=>{
+      lastGPS = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude
+      };
+      console.log("GPS更新:", lastGPS);
+    },
+    err=>console.warn("GPS錯誤:",err),
+    {
+      enableHighAccuracy:false,
+      maximumAge:10000,
+      timeout:5000
+    }
+  );
+}
+
+function getFastGPS(){
   return new Promise((resolve,reject)=>{
-    const now=Date.now();
-    if(lastGPS && now-lastGPSAt<maxAge){resolve(lastGPS);return;}
-    navigator.geolocation.getCurrentPosition(
-      pos=>{lastGPS={lat:pos.coords.latitude,lng:pos.coords.longitude};lastGPSAt=Date.now();resolve(lastGPS);},
-      err=>reject(err),
-      {enableHighAccuracy:false,timeout:5000}
-    );
+    if(lastGPS){
+      resolve(lastGPS);
+    }else{
+      reject("尚未取得GPS");
+    }
   });
 }
 
@@ -151,34 +173,35 @@ async function initUser(){
 
 /* ===== 更新打卡區狀態 ===== */
 async function updateStatus(){
-  // 初始占位，灰色提示詞
-  statusInfo.textContent = "定位載入中…";
-  statusInfo.style.background = "#95a5a6";
+  if(!lastGPS){
+    statusInfo.textContent="定位中…";
+    statusInfo.style.background="#95a5a6";
+    return;
+  }
 
   try{
-    const [ip, gps] = await Promise.all([getIP(), getCachedGPS()]);
+    const ip = getIP();  // 不等待
+    const gps = lastGPS;
 
     const res = await fetch(`${API_ENDPOINT}?action=check&lat=${gps.lat}&lng=${gps.lng}&ip=${ip}`);
     const data = await res.json();
 
     if(data.rangeStatus === "有效打卡區"){
-      statusInfo.style.background = "#2ecc71";
-      statusInfo.textContent = "有效打卡區";
-    } else {
-      statusInfo.style.background = "#e74c3c";
-      const distText = data.distance !== null ? ` (${data.distance} 公尺)` : "";
-      statusInfo.textContent = "無效打卡區" + distText;
+      statusInfo.style.background="#2ecc71";
+      statusInfo.textContent="有效打卡區";
+    }else{
+      statusInfo.style.background="#e74c3c";
+      statusInfo.textContent=`無效打卡區 (${data.distance} 公尺)`;
     }
 
     statusLoaded = true;
 
-  } catch(err){
-    // 失敗時保留灰色提示
-    statusInfo.textContent = "定位確認中…";
-    statusInfo.style.background = "#95a5a6";
-    console.warn("更新狀態失敗：", err);
+  }catch(err){
+    statusInfo.textContent="定位確認中…";
+    statusInfo.style.background="#95a5a6";
   }
 }
+
 /* ===== 更新今日打卡紀錄 ===== */
 async function updateTodayRecords(){
   todayRecords.innerHTML="載入中...";
@@ -344,6 +367,8 @@ window.onload = async () => {
   // 頁面一開啟就先顯示文字
   statusInfo.textContent = "定位載入中…";
   statusInfo.style.background = "#95a5a6";
+  initGPSWatcher();  // 🔥 一進頁面就開始抓定位
+  preloadIP();  // 背景抓IP
 
   setButtonsLock(true);
   await initUser();
