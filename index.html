@@ -58,13 +58,12 @@ const API_ENDPOINT="https://script.google.com/macros/s/AKfycbwSkLjxiKyGkIswLZSXT
 let userId="", userName="", dataReady=false;
 let statusLoaded=false;
 let MANAGERS = [];
-/* ===== GPS 即時優化系統 ===== */
+/* ===== GPS 即時系統 ===== */
 let lastGPS = null;
 let gpsAccuracy = null;
 let cachedIP = "";
-let stableStatus = null;     // 穩定狀態
-let lastCheckStatus = null;  // 上一次判斷
-let stableCount = 0;         // 穩定計數
+let lastRangeStatus = null;  // 只記錄上次狀態（防跳）
+
 
 const btnStart=document.getElementById("btnStart");
 const btnEnd=document.getElementById("btnEnd");
@@ -121,8 +120,6 @@ function getIP(){
 
 
 /* ===== 常駐 GPS (秒回) ===== */
-let lastGPS = null;
-
 function initGPSWatcher(){
   if(!navigator.geolocation) return;
 
@@ -130,21 +127,18 @@ function initGPSWatcher(){
     pos=>{
       gpsAccuracy = pos.coords.accuracy;
 
-      // 只接受 80m 內定位（你範圍100m，這樣最安全）
+      // 你範圍100m，只接受 80m 內
       if(gpsAccuracy <= 80){
         lastGPS = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude
         };
-        console.log("GPS穩定:", gpsAccuracy);
-      }else{
-        console.log("GPS精準度不足:", gpsAccuracy);
       }
     },
     err=>console.warn("GPS錯誤:",err),
     {
       enableHighAccuracy:true,
-      maximumAge:5000,
+      maximumAge:3000,
       timeout:5000
     }
   );
@@ -187,32 +181,24 @@ async function updateStatus(){
   }
 
   try{
-    const ip = getIP();
-    const gps = lastGPS;
+    const res = await fetch(
+      `${API_ENDPOINT}?action=check&lat=${lastGPS.lat}&lng=${lastGPS.lng}&ip=${getIP()}`
+    );
 
-    const res = await fetch(`${API_ENDPOINT}?action=check&lat=${gps.lat}&lng=${gps.lng}&ip=${ip}`);
     const data = await res.json();
+    const newStatus = data.rangeStatus;
 
-    const currentStatus = data.rangeStatus;
-
-    // ===== 穩定判斷機制 =====
-    if(currentStatus === lastCheckStatus){
-      stableCount++;
-    }else{
-      stableCount = 0;
+    // ===== 防止畫面亂跳 =====
+    if(newStatus === lastRangeStatus){
+      return; // 狀態沒變就不要重繪
     }
 
-    lastCheckStatus = currentStatus;
+    lastRangeStatus = newStatus;
 
-    // 連續兩次相同才真正更新畫面
-    if(stableCount >= 1){
-      stableStatus = currentStatus;
-    }
-
-    if(stableStatus === "有效打卡區"){
+    if(newStatus === "有效打卡區"){
       statusInfo.style.background="#2ecc71";
       statusInfo.textContent="有效打卡區";
-    }else if(stableStatus){
+    }else{
       statusInfo.style.background="#e74c3c";
       const distText = data.distance ? ` (${data.distance} 公尺)` : "";
       statusInfo.textContent="無效打卡區" + distText;
@@ -224,6 +210,7 @@ async function updateStatus(){
     console.warn("狀態更新失敗:",err);
   }
 }
+
 
 /* ===== 更新今日打卡紀錄 ===== */
 async function updateTodayRecords(){
@@ -398,22 +385,17 @@ window.onload = async () => {
 
   setButtonsLock(true);
 
-  // 🔥 先啟動 GPS 與 IP
-  initGPSWatcher();
-  preloadIP();
+  initGPSWatcher();  // 立即啟動 GPS
+  preloadIP();       // 背景抓 IP
 
   await initUser();
-
   updateTodayRecords();
 
   setButtonsLock(false);
   dataReady = true;
 
-  // 1 秒後開始檢查（等 GPS 有機會抓到）
-  setTimeout(updateStatus,1000);
-
-  // 每 8 秒更新一次（比原本15秒更即時）
-  setInterval(updateStatus, 8000);
+  setTimeout(updateStatus, 1200);  // 等 GPS
+  setInterval(updateStatus, 6000); // 每6秒更新
 };
 
 </script>
