@@ -58,6 +58,13 @@ const API_ENDPOINT="https://script.google.com/macros/s/AKfycbwSkLjxiKyGkIswLZSXT
 let userId="", userName="", dataReady=false;
 let statusLoaded=false;
 let MANAGERS = [];
+/* ===== GPS 即時優化系統 ===== */
+let lastGPS = null;
+let gpsAccuracy = null;
+let cachedIP = "";
+let stableStatus = null;     // 穩定狀態
+let lastCheckStatus = null;  // 上一次判斷
+let stableCount = 0;         // 穩定計數
 
 const btnStart=document.getElementById("btnStart");
 const btnEnd=document.getElementById("btnEnd");
@@ -112,6 +119,7 @@ function getIP(){
   return cachedIP || "";
 }
 
+
 /* ===== 常駐 GPS (秒回) ===== */
 let lastGPS = null;
 
@@ -120,30 +128,28 @@ function initGPSWatcher(){
 
   navigator.geolocation.watchPosition(
     pos=>{
-      lastGPS = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude
-      };
-      console.log("GPS更新:", lastGPS);
+      gpsAccuracy = pos.coords.accuracy;
+
+      // 只接受 80m 內定位（你範圍100m，這樣最安全）
+      if(gpsAccuracy <= 80){
+        lastGPS = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude
+        };
+        console.log("GPS穩定:", gpsAccuracy);
+      }else{
+        console.log("GPS精準度不足:", gpsAccuracy);
+      }
     },
     err=>console.warn("GPS錯誤:",err),
     {
-      enableHighAccuracy:false,
-      maximumAge:10000,
+      enableHighAccuracy:true,
+      maximumAge:5000,
       timeout:5000
     }
   );
 }
 
-function getFastGPS(){
-  return new Promise((resolve,reject)=>{
-    if(lastGPS){
-      resolve(lastGPS);
-    }else{
-      reject("尚未取得GPS");
-    }
-  });
-}
 
 /* ===== LIFF 使用者初始化 ===== */
 async function initUser(){
@@ -173,6 +179,7 @@ async function initUser(){
 
 /* ===== 更新打卡區狀態 ===== */
 async function updateStatus(){
+
   if(!lastGPS){
     statusInfo.textContent="定位中…";
     statusInfo.style.background="#95a5a6";
@@ -180,25 +187,41 @@ async function updateStatus(){
   }
 
   try{
-    const ip = getIP();  // 不等待
+    const ip = getIP();
     const gps = lastGPS;
 
     const res = await fetch(`${API_ENDPOINT}?action=check&lat=${gps.lat}&lng=${gps.lng}&ip=${ip}`);
     const data = await res.json();
 
-    if(data.rangeStatus === "有效打卡區"){
+    const currentStatus = data.rangeStatus;
+
+    // ===== 穩定判斷機制 =====
+    if(currentStatus === lastCheckStatus){
+      stableCount++;
+    }else{
+      stableCount = 0;
+    }
+
+    lastCheckStatus = currentStatus;
+
+    // 連續兩次相同才真正更新畫面
+    if(stableCount >= 1){
+      stableStatus = currentStatus;
+    }
+
+    if(stableStatus === "有效打卡區"){
       statusInfo.style.background="#2ecc71";
       statusInfo.textContent="有效打卡區";
-    }else{
+    }else if(stableStatus){
       statusInfo.style.background="#e74c3c";
-      statusInfo.textContent=`無效打卡區 (${data.distance} 公尺)`;
+      const distText = data.distance ? ` (${data.distance} 公尺)` : "";
+      statusInfo.textContent="無效打卡區" + distText;
     }
 
     statusLoaded = true;
 
   }catch(err){
-    statusInfo.textContent="定位確認中…";
-    statusInfo.style.background="#95a5a6";
+    console.warn("狀態更新失敗:",err);
   }
 }
 
@@ -294,7 +317,12 @@ async function clockInOut(status){
 
   try{
     const ip = await getIP();
-    const gps = await getCachedGPS();
+   if(!lastGPS){
+  Swal.fire({icon:"warning",title:"定位尚未完成",timer:1500,showConfirmButton:false});
+  return;
+}
+const gps = lastGPS;
+
 
     const res = await fetch(API_ENDPOINT, {
       method:"POST",
@@ -364,24 +392,30 @@ document.getElementById("btnApprove").onclick = () => {
 };
 /* ===== 頁面載入 ===== */
 window.onload = async () => {
-  // 頁面一開啟就先顯示文字
+
   statusInfo.textContent = "定位載入中…";
   statusInfo.style.background = "#95a5a6";
-  initGPSWatcher();  // 🔥 一進頁面就開始抓定位
-  preloadIP();  // 背景抓IP
 
   setButtonsLock(true);
+
+  // 🔥 先啟動 GPS 與 IP
+  initGPSWatcher();
+  preloadIP();
+
   await initUser();
 
-  // 秒呈現 UI
   updateTodayRecords();
+
   setButtonsLock(false);
   dataReady = true;
 
-  // 後台慢慢更新定位與狀態
-  updateStatus();
-  setInterval(updateStatus, 15000); // 每 15 秒更新
+  // 1 秒後開始檢查（等 GPS 有機會抓到）
+  setTimeout(updateStatus,1000);
+
+  // 每 8 秒更新一次（比原本15秒更即時）
+  setInterval(updateStatus, 8000);
 };
+
 </script>
 </body>
 </html>
