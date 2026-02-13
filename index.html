@@ -170,56 +170,44 @@ async function initUser(){
 
 
 /* ===== 更新打卡區狀態 ===== */
-async function updateStatus(){
+async function updateStatus() {
 
-  if(!lastGPS){
-    statusInfo.textContent="定位中…";
-    statusInfo.style.background="#95a5a6";
+  if (!lastGPS) {
+    statusInfo.textContent = "定位中…";
+    statusInfo.style.background = "#95a5a6";
     statusLoaded = false;
     return;
   }
 
-  try{
+  try {
     const res = await fetch(
       `${API_ENDPOINT}?action=check&lat=${lastGPS.lat}&lng=${lastGPS.lng}&ip=${getIP()}`
     );
 
     const data = await res.json();
     const newStatus = data.rangeStatus;
-
-    if(!newStatus) return;
+    if (!newStatus) return;
 
     // 狀態沒變就不重繪（防閃爍）
-    if(newStatus === lastRangeStatus){
-      return;
-    }
-
+    if (newStatus === lastRangeStatus) return;
     lastRangeStatus = newStatus;
 
-    const accuracyText = gpsAccuracy
-      ? ` (±${Math.round(gpsAccuracy)}m)`
-      : "";
-
-    if(newStatus === "有效打卡區"){
-      statusInfo.style.background="#2ecc71";
-      statusInfo.textContent="有效打卡區" + accuracyText;
-    }else{
-      statusInfo.style.background="#e74c3c";
+    if (newStatus === "有效打卡區") {
+      statusInfo.style.background = "#2ecc71";
+      statusInfo.textContent = "有效打卡區";
+    } else {
+      statusInfo.style.background = "#e74c3c";
       const distText = data.distance ? ` (${data.distance} 公尺)` : "";
-      statusInfo.textContent="無效打卡區" + distText + accuracyText;
-    }
-
-    // 如果精準度過低，給提醒（不阻止）
-    if(gpsAccuracy && gpsAccuracy > 150){
-      statusInfo.textContent += " ⚠定位訊號較弱";
+      statusInfo.textContent = "無效打卡區" + distText; // ✅ 只顯示距離
     }
 
     statusLoaded = true;
 
-  }catch(err){
-    console.warn("狀態更新失敗:",err);
+  } catch (err) {
+    console.warn("狀態更新失敗:", err);
   }
 }
+
 
 
 /* ===== 更新今日打卡紀錄 ===== */
