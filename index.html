@@ -181,14 +181,18 @@ async function updateStatus() {
     return;
   }
 
+  // 顯示連線中
+  statusCard.style.background = "#f1c40f";
+  statusMain.textContent = "連線中…";
+
   try {
     const res = await fetch(
       `${API_ENDPOINT}?action=check&lat=${lastGPS.lat}&lng=${lastGPS.lng}&ip=${getIP()}`
     );
     const data = await res.json();
-    const newStatus = data.rangeStatus;
 
-    if (!newStatus) return;
+    const newStatus = data.rangeStatus || "無回應";
+
     if (newStatus === lastRangeStatus) return; // 狀態沒變不更新
 
     lastRangeStatus = newStatus;
@@ -206,6 +210,9 @@ async function updateStatus() {
 
   } catch (err) {
     console.warn("狀態更新失敗:", err);
+    statusCard.style.background = "#e67e22";
+    statusMain.textContent = "連線失敗";
+    statusLoaded = false;
   }
 }
 
@@ -377,7 +384,6 @@ document.getElementById("btnApprove").onclick = () => {
 };
 /* ===== 頁面載入 ===== */
 window.onload = async () => {
-
   statusInfo.textContent = "定位載入中…";
   statusInfo.style.background = "#95a5a6";
 
@@ -392,9 +398,10 @@ window.onload = async () => {
   setButtonsLock(false);
   dataReady = true;
 
-  setTimeout(updateStatus, 1200);
-  setInterval(updateStatus, 6000);
+  updateStatus();            // 立即呼叫一次
+  setInterval(updateStatus, 6000); // 每6秒更新
 };
+
 
 
 </script>
