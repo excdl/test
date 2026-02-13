@@ -170,49 +170,54 @@ async function initUser(){
 
 
 /* ===== 更新打卡區狀態 ===== */
-async function updateStatus() {
-  const statusCard = document.getElementById("statusCard");
-  const statusMain = document.getElementById("statusMain");
+async function updateStatus(){
 
-  if (!lastGPS) {
-    statusCard.style.background = "#95a5a6";
-    statusMain.textContent = "定位中…";
+  if(!lastGPS){
+    statusInfo.textContent="定位中…";
+    statusInfo.style.background="#95a5a6";
     statusLoaded = false;
     return;
   }
 
-  // 顯示連線中
-  statusCard.style.background = "#f1c40f";
-  statusMain.textContent = "連線中…";
-
-  try {
+  try{
     const res = await fetch(
       `${API_ENDPOINT}?action=check&lat=${lastGPS.lat}&lng=${lastGPS.lng}&ip=${getIP()}`
     );
+
     const data = await res.json();
+    const newStatus = data.rangeStatus;
 
-    const newStatus = data.rangeStatus || "無回應";
+    if(!newStatus) return;
 
-    if (newStatus === lastRangeStatus) return; // 狀態沒變不更新
+    // 狀態沒變就不重繪（防閃爍）
+    if(newStatus === lastRangeStatus){
+      return;
+    }
 
     lastRangeStatus = newStatus;
 
-    if (newStatus === "有效打卡區") {
-      statusCard.style.background = "#2ecc71";
-      statusMain.textContent = "有效打卡區";
-    } else {
-      statusCard.style.background = "#e74c3c";
+    const accuracyText = gpsAccuracy
+      ? ` (±${Math.round(gpsAccuracy)}m)`
+      : "";
+
+    if(newStatus === "有效打卡區"){
+      statusInfo.style.background="#2ecc71";
+      statusInfo.textContent="有效打卡區" + accuracyText;
+    }else{
+      statusInfo.style.background="#e74c3c";
       const distText = data.distance ? ` (${data.distance} 公尺)` : "";
-      statusMain.textContent = "無效打卡區" + distText;
+      statusInfo.textContent="無效打卡區" + distText + accuracyText;
+    }
+
+    // 如果精準度過低，給提醒（不阻止）
+    if(gpsAccuracy && gpsAccuracy > 150){
+      statusInfo.textContent += " ⚠定位訊號較弱";
     }
 
     statusLoaded = true;
 
-  } catch (err) {
-    console.warn("狀態更新失敗:", err);
-    statusCard.style.background = "#e67e22";
-    statusMain.textContent = "連線失敗";
-    statusLoaded = false;
+  }catch(err){
+    console.warn("狀態更新失敗:",err);
   }
 }
 
