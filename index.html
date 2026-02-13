@@ -125,13 +125,12 @@ function initGPSWatcher(){
     pos=>{
       gpsAccuracy = pos.coords.accuracy;
 
-      // 你範圍100m，只接受 80m 內
-      if(gpsAccuracy <= 80){
-        lastGPS = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude
-        };
-      }
+      lastGPS = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude
+      };
+
+      console.log("目前精準度:", gpsAccuracy);
     },
     err=>console.warn("GPS錯誤:",err),
     {
@@ -141,6 +140,7 @@ function initGPSWatcher(){
     }
   );
 }
+
 
 
 /* ===== LIFF 使用者初始化 ===== */
@@ -175,6 +175,7 @@ async function updateStatus(){
   if(!lastGPS){
     statusInfo.textContent="定位中…";
     statusInfo.style.background="#95a5a6";
+    statusLoaded = false;
     return;
   }
 
@@ -186,20 +187,31 @@ async function updateStatus(){
     const data = await res.json();
     const newStatus = data.rangeStatus;
 
-    // ===== 防止畫面亂跳 =====
+    if(!newStatus) return;
+
+    // 狀態沒變就不重繪（防閃爍）
     if(newStatus === lastRangeStatus){
-      return; // 狀態沒變就不要重繪
+      return;
     }
 
     lastRangeStatus = newStatus;
 
+    const accuracyText = gpsAccuracy
+      ? ` (±${Math.round(gpsAccuracy)}m)`
+      : "";
+
     if(newStatus === "有效打卡區"){
       statusInfo.style.background="#2ecc71";
-      statusInfo.textContent="有效打卡區";
+      statusInfo.textContent="有效打卡區" + accuracyText;
     }else{
       statusInfo.style.background="#e74c3c";
       const distText = data.distance ? ` (${data.distance} 公尺)` : "";
-      statusInfo.textContent="無效打卡區" + distText;
+      statusInfo.textContent="無效打卡區" + distText + accuracyText;
+    }
+
+    // 如果精準度過低，給提醒（不阻止）
+    if(gpsAccuracy && gpsAccuracy > 150){
+      statusInfo.textContent += " ⚠定位訊號較弱";
     }
 
     statusLoaded = true;
@@ -383,8 +395,8 @@ window.onload = async () => {
 
   setButtonsLock(true);
 
-  initGPSWatcher();  // 立即啟動 GPS
-  preloadIP();       // 背景抓 IP
+  initGPSWatcher();
+  preloadIP();
 
   await initUser();
   updateTodayRecords();
@@ -392,9 +404,10 @@ window.onload = async () => {
   setButtonsLock(false);
   dataReady = true;
 
-  setTimeout(updateStatus, 1200);  // 等 GPS
-  setInterval(updateStatus, 6000); // 每6秒更新
+  setTimeout(updateStatus, 1200);
+  setInterval(updateStatus, 6000);
 };
+
 
 </script>
 </body>
